@@ -35,3 +35,9 @@ markers = [
     "integration: tests that hit real ~/.claude data",
 ]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.22",
+    "vulture>=2.16",
+]

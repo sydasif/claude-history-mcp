@@ -1,9 +1,4 @@
-"""Shared utilities: surrogate handling, timestamp parsing, path helpers.
-
-NOTE: This is the single source of truth for `parse_timestamp`. The original
-blueprint defined it twice (once here, once in parser.py) — parser.py now
-imports it from here instead of redefining it.
-"""
+"""Shared utilities: surrogate handling, timestamp parsing, path helpers."""
 
 import re
 from datetime import datetime
@@ -19,18 +14,20 @@ def scrub_surrogates(s: str | None) -> str | None:
 
 
 def parse_timestamp(ts: str | None) -> datetime | None:
-    """Parse ISO 8601 timestamp to datetime. Returns None for missing/invalid."""
+    """Parse ISO 8601 timestamp to datetime. Returns None for missing/invalid.
+
+    Returns naive UTC datetime for consistent comparison.
+    """
     if not ts:
         return None
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        # Convert to naive UTC for consistent comparison
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
     except (ValueError, AttributeError):
         return None
-
-
-def epoch_ms_to_datetime(ms: int) -> datetime:
-    """Convert epoch milliseconds to datetime."""
-    return datetime.fromtimestamp(ms / 1000)
 
 
 def get_claude_dir() -> Path:

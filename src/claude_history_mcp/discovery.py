@@ -9,7 +9,6 @@ from .utils import get_projects_dir
 
 @dataclass
 class ProjectInfo:
-    dir_name: str  # encoded name e.g. "-home-zulu-litellm-proxy"
     display_name: str  # human-readable from cwd field
     path: Path  # full path to project dir
     jsonl_files: list[Path]
@@ -40,7 +39,6 @@ def discover_projects(projects_dir: Path | None = None) -> list[ProjectInfo]:
         display_name = _extract_display_name(jsonl_files[0]) or entry.name
         projects.append(
             ProjectInfo(
-                dir_name=entry.name,
                 display_name=display_name,
                 path=entry,
                 jsonl_files=jsonl_files,
@@ -68,7 +66,7 @@ def discover_all_sessions(projects_dir: Path | None = None) -> list[SessionFileI
 def _extract_display_name(jsonl_path: Path) -> str | None:
     """Read the cwd field from the first line (of the first 20) that has one."""
     try:
-        with open(jsonl_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(jsonl_path, encoding="utf-8", errors="replace") as f:
             for i, line in enumerate(f):
                 if i >= 20:
                     break

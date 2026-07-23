@@ -3,7 +3,7 @@
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 SCHEMA = """
@@ -80,7 +80,24 @@ CREATE INDEX IF NOT EXISTS idx_history_project ON history_commands(project);
 
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
+
+
+# Columns on the `sessions` table that upsert_session accepts via **kwargs.
+# Unknown keys are silently skipped to prevent SQL injection via dynamic column names.
+_ALLOWED_SESSION_COLUMNS: frozenset[str] = frozenset(
+    {
+        "summary",
+        "ai_title",
+        "first_timestamp",
+        "last_timestamp",
+        "message_count",
+        "first_user_message",
+        "cwd",
+        "total_input_tokens",
+        "total_output_tokens",
+    }
+)
 
 
 class CacheManager:
@@ -124,17 +141,13 @@ class CacheManager:
                 (project_path, display_name, _utcnow()),
             )
             conn.commit()
-        row = conn.execute("SELECT id FROM projects WHERE project_path=?", (project_path,)).fetchone()
+        row = conn.execute(
+            "SELECT id FROM projects WHERE project_path=?", (project_path,)
+        ).fetchone()
         return row["id"]
 
     def recompute_project_stats(self, project_id: int) -> None:
-        """Roll session-level aggregates up to the parent project row.
-
-        Fix: the original blueprint exposed total_messages/total_input_tokens/
-        total_output_tokens/earliest_timestamp/latest_timestamp on `projects`
-        but nothing ever wrote to them, so list_projects() always reported
-        zeros. This recomputes them from `sessions` after each load.
-        """
+        """Roll session-level aggregates up to the parent project row."""
         conn = self.connect()
         row = conn.execute(
             "SELECT COALESCE(SUM(message_count), 0) AS total_messages, "
@@ -161,11 +174,17 @@ class CacheManager:
         conn.commit()
 
     def get_project(self, project_path: str) -> dict | None:
-        row = self.connect().execute("SELECT * FROM projects WHERE project_path=?", (project_path,)).fetchone()
+        row = (
+            self.connect()
+            .execute("SELECT * FROM projects WHERE project_path=?", (project_path,))
+            .fetchone()
+        )
         return dict(row) if row else None
 
     def get_all_projects(self) -> list[dict]:
-        rows = self.connect().execute("SELECT * FROM projects ORDER BY last_updated DESC").fetchall()
+        rows = (
+            self.connect().execute("SELECT * FROM projects ORDER BY last_updated DESC").fetchall()
+        )
         return [dict(r) for r in rows]
 
     # --- Session CRUD ---
@@ -175,7 +194,7 @@ class CacheManager:
         values: list = [project_id, session_id]
         update_clauses = []
         for key, val in kwargs.items():
-            if val is not None:
+            if val is not None and key in _ALLOWED_SESSION_COLUMNS:
                 fields.append(key)
                 values.append(val)
                 update_clauses.append(f"{key}=excluded.{key}")
@@ -201,31 +220,45 @@ class CacheManager:
 
     def get_sessions(self, project_id: int | None = None, limit: int = 100) -> list[dict]:
         if project_id:
-            rows = self.connect().execute(
-                "SELECT s.*, p.project_path, p.display_name FROM sessions s "
-                "JOIN projects p ON s.project_id=p.id WHERE s.project_id=? "
-                "ORDER BY s.last_timestamp DESC LIMIT ?",
-                (project_id, limit),
-            ).fetchall()
+            rows = (
+                self.connect()
+                .execute(
+                    "SELECT s.*, p.project_path, p.display_name FROM sessions s "
+                    "JOIN projects p ON s.project_id=p.id WHERE s.project_id=? "
+                    "ORDER BY s.last_timestamp DESC LIMIT ?",
+                    (project_id, limit),
+                )
+                .fetchall()
+            )
         else:
-            rows = self.connect().execute(
-                "SELECT s.*, p.project_path, p.display_name FROM sessions s "
-                "JOIN projects p ON s.project_id=p.id "
-                "ORDER BY s.last_timestamp DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = (
+                self.connect()
+                .execute(
+                    "SELECT s.*, p.project_path, p.display_name FROM sessions s "
+                    "JOIN projects p ON s.project_id=p.id "
+                    "ORDER BY s.last_timestamp DESC LIMIT ?",
+                    (limit,),
+                )
+                .fetchall()
+            )
         return [dict(r) for r in rows]
 
     def get_session(self, session_id: str) -> dict | None:
-        row = self.connect().execute(
-            "SELECT s.*, p.project_path, p.display_name FROM sessions s "
-            "JOIN projects p ON s.project_id=p.id WHERE s.session_id=?",
-            (session_id,),
-        ).fetchone()
+        row = (
+            self.connect()
+            .execute(
+                "SELECT s.*, p.project_path, p.display_name FROM sessions s "
+                "JOIN projects p ON s.project_id=p.id WHERE s.session_id=?",
+                (session_id,),
+            )
+            .fetchone()
+        )
         return dict(row) if row else None
 
     # --- Message CRUD ---
-    def insert_messages(self, project_id: int, session_id: str, file_name: str, entries: list[dict]):
+    def insert_messages(
+        self, project_id: int, session_id: str, file_name: str, entries: list[dict]
+    ):
         """Insert parsed entries into messages table."""
         conn = self.connect()
         conn.executemany(
@@ -263,15 +296,7 @@ class CacheManager:
         role: str | None = None,
         limit: int = 50,
     ) -> list[dict]:
-        """Full-text search across messages.
-
-        Fix: the original blueprint wrote this as two adjacent top-level
-        string statements (`sql = "..."` followed by a bare `"..."` on the
-        next line) instead of one concatenated string or a `+`-joined
-        expression. That second line is a no-op statement in Python, so the
-        query silently lost its JOIN and WHERE clause and would raise
-        `no such column: p.project_path` on every call.
-        """
+        """Substring search across messages."""
         sql = (
             "SELECT m.*, p.project_path, p.display_name FROM messages m "
             "JOIN projects p ON m.project_id=p.id WHERE m.content_text LIKE ?"
@@ -304,14 +329,7 @@ class CacheManager:
 
     # --- History CRUD ---
     def insert_history_commands(self, commands: list[dict]) -> int:
-        """Insert command history rows, ignoring exact duplicates.
-
-        Fix: original schema had no uniqueness constraint and `initialize()`
-        reloads history.jsonl on every startup (it's append-only, not
-        mtime-tracked), so every restart re-inserted the entire file. The
-        UNIQUE(display, project, session_id, timestamp_epoch) constraint plus
-        INSERT OR IGNORE here makes reloading idempotent.
-        """
+        """Insert command history rows, ignoring duplicates via UNIQUE constraint."""
         conn = self.connect()
         cur = conn.executemany(
             "INSERT OR IGNORE INTO history_commands (display, project, session_id, timestamp_epoch) "
@@ -333,10 +351,14 @@ class CacheManager:
 
     # --- File mtime tracking (cache invalidation) ---
     def get_file_mtime(self, file_path: str) -> float | None:
-        row = self.connect().execute(
-            "SELECT last_mtime FROM file_tracking WHERE file_path=?",
-            (file_path,),
-        ).fetchone()
+        row = (
+            self.connect()
+            .execute(
+                "SELECT last_mtime FROM file_tracking WHERE file_path=?",
+                (file_path,),
+            )
+            .fetchone()
+        )
         return row["last_mtime"] if row else None
 
     def set_file_mtime(self, file_path: str, mtime: float):
@@ -361,7 +383,9 @@ class CacheManager:
         """Clear messages for a project/session (for reparse)."""
         conn = self.connect()
         if session_id:
-            conn.execute("DELETE FROM messages WHERE project_id=? AND session_id=?", (project_id, session_id))
+            conn.execute(
+                "DELETE FROM messages WHERE project_id=? AND session_id=?", (project_id, session_id)
+            )
         else:
             conn.execute("DELETE FROM messages WHERE project_id=?", (project_id,))
         conn.commit()

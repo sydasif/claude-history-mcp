@@ -47,7 +47,7 @@ Defined in `pyproject.toml` as `claude-history-mcp` (dashes): calls `claude_hist
 
 7 tools, 2 resources — all defined in `server.py` with try/except wrappers returning `{"error": str(e)}` on failure:
 
-- `list_projects()` / `list_sessions()` / `search_messages()` / `get_session()` / `get_session_stats()` / `search_history()` / `get_recent_activity()`
+- `list_projects()` / `list_sessions()` / `search_messages()` / `get_session()` / `get_session_stats()` / `search_history()` / `get_recent_activity(hours=24, limit=100)`
 - Resources: `claude://projects`, `claude://history`
 
 Tools accept natural-language date strings ("yesterday", "last week") via `dateparser`.
@@ -60,6 +60,11 @@ Tools accept natural-language date strings ("yesterday", "last week") via `datep
 - Tool result content is either `str` or `list[dict]` — normalize to text
 - Lone surrogate characters (U+D800–U+DFFF) must be scrubbed before SQLite
 - Unknown entry types with a `uuid` are kept for searchability
+
+### Recent Fixes (2026-07-23)
+
+1. **`get_recent_activity` limit parameter** — Added optional `limit` parameter (default 100) to prevent token overflow on large result sets. Default preserves backward compatibility.
+2. **Timezone handling** — `parse_timestamp()` and `_parse_natural_date()` now return naive UTC datetimes for consistent comparison. Fixed "can't compare offset-naive and offset-aware" errors.
 
 ### Deployment
 

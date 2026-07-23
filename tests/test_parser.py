@@ -1,4 +1,11 @@
-from claude_history_mcp.models import AiTitleEntry, AssistantEntry, BaseEntry, SummaryEntry, SystemEntry, UserEntry
+from claude_history_mcp.models import (
+    AiTitleEntry,
+    AssistantEntry,
+    BaseEntry,
+    SummaryEntry,
+    SystemEntry,
+    UserEntry,
+)
 from claude_history_mcp.parser import (
     create_entry,
     extract_text,
@@ -6,8 +13,8 @@ from claude_history_mcp.parser import (
     extract_tool_result_text,
     get_entry_text,
     get_entry_tokens,
-    parse_timestamp,
 )
+from claude_history_mcp.utils import parse_timestamp
 
 
 def test_create_entry_user():
@@ -74,7 +81,10 @@ def test_extract_text_none():
 def test_extract_tool_names():
     from claude_history_mcp.models import ToolUseContent
 
-    content = [ToolUseContent(id="t1", name="Bash", input={}), ToolUseContent(id="t2", name="Read", input={})]
+    content = [
+        ToolUseContent(id="t1", name="Bash", input={}),
+        ToolUseContent(id="t2", name="Read", input={}),
+    ]
     assert extract_tool_names(content) == ["Bash", "Read"]
 
 
@@ -104,7 +114,11 @@ def test_get_entry_tokens():
     entry = UserEntry.model_validate(
         {
             "type": "user",
-            "message": {"role": "user", "content": [], "usage": {"input_tokens": 10, "output_tokens": 5}},
+            "message": {
+                "role": "user",
+                "content": [],
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            },
         }
     )
     assert get_entry_tokens(entry) == (10, 5)

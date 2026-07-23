@@ -6,18 +6,29 @@ from pathlib import Path
 
 from .cache import CacheManager
 from .discovery import _extract_display_name, discover_projects
-from .models import AiTitleEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry, SummaryEntry, UserEntry
-from .parser import create_entry, extract_text, extract_tool_names, get_entry_text, get_entry_tokens, parse_timestamp
-from .utils import get_projects_dir, scrub_surrogates
+from .models import (
+    AiTitleEntry,
+    AssistantEntry,
+    AttachmentEntry,
+    QueueOperationEntry,
+    SummaryEntry,
+    UserEntry,
+)
+from .parser import (
+    create_entry,
+    extract_text,
+    extract_tool_names,
+    get_entry_text,
+    get_entry_tokens,
+)
+from .utils import get_projects_dir, parse_timestamp, scrub_surrogates
 
 
 @dataclass
 class LoadResult:
     session_id: str
     project_id: int
-    total_entries: int
     parsed_entries: int
-    skipped_entries: int
     error_entries: int
     first_user_message: str
     message_count: int
@@ -48,7 +59,7 @@ def load_jsonl_file(
     summary = None
     ai_title = None
 
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -137,7 +148,9 @@ def load_jsonl_file(
         first_timestamp=first_timestamp.isoformat() if first_timestamp else None,
         last_timestamp=last_timestamp.isoformat() if last_timestamp else None,
         message_count=message_count,
-        first_user_message=scrub_surrogates(first_user_message[:500] if first_user_message else None),
+        first_user_message=scrub_surrogates(
+            first_user_message[:500] if first_user_message else None
+        ),
         cwd=cwd,
         total_input_tokens=total_input,
         total_output_tokens=total_output,
@@ -146,9 +159,7 @@ def load_jsonl_file(
     return LoadResult(
         session_id=session_id,
         project_id=project_id,
-        total_entries=message_count + skipped + errors,
         parsed_entries=len(parsed_entries),
-        skipped_entries=skipped,
         error_entries=errors,
         first_user_message=first_user_message[:200],
         message_count=message_count,
@@ -166,7 +177,7 @@ def load_history_file(file_path: Path, cache: CacheManager) -> int:
     files are).
     """
     commands = []
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:

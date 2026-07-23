@@ -5,28 +5,22 @@ from typing import Any
 from pydantic import BaseModel
 
 from .models import (
+    SILENT_SKIP_TYPES,
     AiTitleEntry,
     AssistantEntry,
     AttachmentEntry,
     BaseEntry,
     ContentItem,
     QueueOperationEntry,
-    SILENT_SKIP_TYPES,
     SummaryEntry,
     SystemEntry,
+    TextContent,
     ThinkingContent,
     ToolResultContent,
     ToolUseContent,
-    TextContent,
     TranscriptEntry,
     UserEntry,
 )
-
-# Re-exported so callers (e.g. loader.py) have one place to import timestamp
-# parsing from; kept as a thin alias to avoid the duplicate-definition bug
-# that existed in the original blueprint (parser.py and utils.py both defined
-# parse_timestamp independently).
-from .utils import parse_timestamp  # noqa: F401
 
 ENTRY_CREATORS: dict[str, type[BaseModel]] = {
     "user": UserEntry,
@@ -104,7 +98,10 @@ def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> st
 
 def get_entry_text(entry: TranscriptEntry) -> str:
     """Get searchable text from any entry type."""
-    if isinstance(entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)) and entry.message:
+    if (
+        isinstance(entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry))
+        and entry.message
+    ):
         return extract_text(entry.message.content)
     if isinstance(entry, SystemEntry):
         return entry.content or ""

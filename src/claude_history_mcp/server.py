@@ -197,7 +197,7 @@ def search_history(
 
 
 @mcp.tool
-def get_recent_activity(hours: int = 24) -> list[dict]:
+def get_recent_activity(hours: int = 24, limit: int = 100) -> list[dict]:
     """Get recent Claude Code activity across all projects.
 
     Shows the most recent messages (user prompts and assistant responses)
@@ -205,10 +205,11 @@ def get_recent_activity(hours: int = 24) -> list[dict]:
 
     Args:
         hours: Look back this many hours (default 24)
+        limit: Maximum results to return (default 100)
     """
     try:
         engine = _get_engine()
-        return engine.get_recent_activity(hours=hours)
+        return engine.get_recent_activity(hours=hours, limit=limit)
     except Exception as e:
         return [{"error": str(e)}]
 

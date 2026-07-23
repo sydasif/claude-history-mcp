@@ -1,5 +1,3 @@
-import json
-
 from claude_history_mcp.cache import CacheManager
 
 
@@ -133,10 +131,32 @@ def test_search_messages_with_project_filter(tmp_path):
     pid_a = cache.upsert_project("/a", "a")
     pid_b = cache.upsert_project("/b", "b")
     cache.insert_messages(
-        pid_a, "s1", "s1.jsonl", [{"entry_type": "user", "timestamp": None, "uuid": "u1", "content_text": "hi", "raw_json": "{}"}]
+        pid_a,
+        "s1",
+        "s1.jsonl",
+        [
+            {
+                "entry_type": "user",
+                "timestamp": None,
+                "uuid": "u1",
+                "content_text": "hi",
+                "raw_json": "{}",
+            }
+        ],
     )
     cache.insert_messages(
-        pid_b, "s2", "s2.jsonl", [{"entry_type": "user", "timestamp": None, "uuid": "u2", "content_text": "hi", "raw_json": "{}"}]
+        pid_b,
+        "s2",
+        "s2.jsonl",
+        [
+            {
+                "entry_type": "user",
+                "timestamp": None,
+                "uuid": "u2",
+                "content_text": "hi",
+                "raw_json": "{}",
+            }
+        ],
     )
     results = cache.search_messages("hi", project_id=pid_a)
     assert len(results) == 1
@@ -151,8 +171,20 @@ def test_search_messages_with_role_filter(tmp_path):
         "s1",
         "s1.jsonl",
         [
-            {"entry_type": "user", "timestamp": None, "uuid": "u1", "content_text": "hi", "raw_json": "{}"},
-            {"entry_type": "assistant", "timestamp": None, "uuid": "u2", "content_text": "hi", "raw_json": "{}"},
+            {
+                "entry_type": "user",
+                "timestamp": None,
+                "uuid": "u1",
+                "content_text": "hi",
+                "raw_json": "{}",
+            },
+            {
+                "entry_type": "assistant",
+                "timestamp": None,
+                "uuid": "u2",
+                "content_text": "hi",
+                "raw_json": "{}",
+            },
         ],
     )
     results = cache.search_messages("hi", role="assistant")
@@ -168,8 +200,20 @@ def test_get_session_messages_ordered(tmp_path):
         "s1",
         "s1.jsonl",
         [
-            {"entry_type": "user", "timestamp": None, "uuid": "u1", "content_text": "first", "raw_json": "{}"},
-            {"entry_type": "assistant", "timestamp": None, "uuid": "u2", "content_text": "second", "raw_json": "{}"},
+            {
+                "entry_type": "user",
+                "timestamp": None,
+                "uuid": "u1",
+                "content_text": "first",
+                "raw_json": "{}",
+            },
+            {
+                "entry_type": "assistant",
+                "timestamp": None,
+                "uuid": "u2",
+                "content_text": "second",
+                "raw_json": "{}",
+            },
         ],
     )
     msgs = cache.get_session_messages("s1")
@@ -200,7 +244,12 @@ def test_search_history_finds_matching_display(tmp_path):
     cache = _cache(tmp_path)
     cache.insert_history_commands(
         [
-            {"display": "search for litellm bug", "project": "/a", "sessionId": "s1", "timestamp": 1000},
+            {
+                "display": "search for litellm bug",
+                "project": "/a",
+                "sessionId": "s1",
+                "timestamp": 1000,
+            },
             {"display": "unrelated command", "project": "/a", "sessionId": "s1", "timestamp": 1001},
         ]
     )
@@ -241,9 +290,7 @@ def test_get_stats_counts(tmp_path):
 def test_transaction_commits_on_success(tmp_path):
     cache = _cache(tmp_path)
     with cache.transaction() as conn:
-        conn.execute(
-            "INSERT INTO projects (project_path, display_name) VALUES (?, ?)", ("/a", "a")
-        )
+        conn.execute("INSERT INTO projects (project_path, display_name) VALUES (?, ?)", ("/a", "a"))
     assert cache.get_project("/a") is not None
 
 

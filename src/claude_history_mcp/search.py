@@ -1,6 +1,7 @@
 """Higher-level query functions on top of CacheManager, with date/filter support."""
 
-from datetime import datetime, timedelta, timezone
+import json
+from datetime import UTC, datetime, timedelta, timezone
 
 import dateparser
 
@@ -30,7 +31,8 @@ class SearchEngine:
             sessions = [
                 s
                 for s in sessions
-                if project.lower() in (s.get("project_path", "") + s.get("display_name", "")).lower()
+                if project.lower()
+                in (s.get("project_path", "") + s.get("display_name", "")).lower()
             ]
 
         if from_date or to_date:
@@ -66,7 +68,10 @@ class SearchEngine:
         if project:
             projects = self.cache.get_all_projects()
             for p in projects:
-                if project.lower() in (p.get("project_path", "") + p.get("display_name", "")).lower():
+                if (
+                    project.lower()
+                    in (p.get("project_path", "") + p.get("display_name", "")).lower()
+                ):
                     project_id = p["id"]
                     break
 
@@ -109,7 +114,10 @@ class SearchEngine:
                 session_id = matches[0]["session_id"]
             elif len(matches) > 1:
                 # Ambiguous — return list of candidates so caller can disambiguate
-                return {"error": "ambiguous_prefix", "candidates": [m["session_id"] for m in matches[:10]]}
+                return {
+                    "error": "ambiguous_prefix",
+                    "candidates": [m["session_id"] for m in matches[:10]],
+                }
         if not session:
             return None
 
@@ -133,8 +141,6 @@ class SearchEngine:
         for msg in messages:
             if msg.get("tool_names"):
                 try:
-                    import json
-
                     tools = json.loads(msg["tool_names"])
                     for t in tools:
                         tool_counts[t] = tool_counts.get(t, 0) + 1
@@ -181,7 +187,7 @@ class SearchEngine:
             to_dt = self._parse_natural_date(to_date, end_of_day=True) if to_date else None
             filtered = []
             for r in results:
-                ts = datetime.fromtimestamp(r.get("timestamp_epoch", 0) / 1000)
+                ts = datetime.fromtimestamp(r.get("timestamp_epoch", 0) / 1000, tz=UTC)
                 if from_dt and ts < from_dt:
                     continue
                 if to_dt and ts > to_dt:
@@ -191,16 +197,9 @@ class SearchEngine:
 
         return results[:limit]
 
-    def get_recent_activity(self, hours: int = 24) -> list[dict]:
-        """Get recent messages across all projects.
-
-        Fix: the original blueprint filtered with `WHERE m.timestamp >= ?`,
-        which in SQL silently drops rows where timestamp IS NULL (NULL
-        comparisons are neither true nor false). Spec 3.2 requires
-        timestamp-less entries to always survive date filtering, so those
-        rows are now included and sorted after the timestamped ones.
-        """
-        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
+    def get_recent_activity(self, hours: int = 24, limit: int = 100) -> list[dict]:
+        """Get recent messages across all projects. Timestamp-less entries always survive date filtering (spec 3.2)."""
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=hours)
         cutoff_str = cutoff.isoformat()
 
         conn = self.cache.connect()
@@ -208,8 +207,8 @@ class SearchEngine:
             "SELECT m.*, p.project_path, p.display_name FROM messages m "
             "JOIN projects p ON m.project_id=p.id "
             "WHERE (m.timestamp >= ? OR m.timestamp IS NULL) AND m.entry_type IN ('user', 'assistant') "
-            "ORDER BY (m.timestamp IS NULL) ASC, m.timestamp DESC LIMIT 100",
-            (cutoff_str,),
+            "ORDER BY (m.timestamp IS NULL) ASC, m.timestamp DESC LIMIT ?",
+            (cutoff_str, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -218,8 +217,12 @@ class SearchEngine:
     ) -> datetime | None:
         settings = {"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": False}
         dt = dateparser.parse(date_str, settings=settings)
-        if dt and start_of_day:
-            dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-        if dt and end_of_day:
-            dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        if dt:
+            # Ensure naive UTC datetime for comparison with parse_timestamp results
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            if start_of_day:
+                dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            if end_of_day:
+                dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         return dt

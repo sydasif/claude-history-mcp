@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from claude_history_mcp.utils import (
-    epoch_ms_to_datetime,
     get_claude_dir,
     get_projects_dir,
     parse_timestamp,
@@ -34,11 +33,6 @@ def test_parse_timestamp_none():
 
 def test_parse_timestamp_invalid():
     assert parse_timestamp("garbage") is None
-
-
-def test_epoch_ms_to_datetime():
-    dt = epoch_ms_to_datetime(1784532628943)
-    assert dt.year >= 2026
 
 
 def test_get_claude_dir():
