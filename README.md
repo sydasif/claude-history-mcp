@@ -26,7 +26,7 @@ Reads from `~/.claude/projects/**/*.jsonl` (session transcripts) and `~/.claude/
 ### Install with uv (recommended)
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/sydasif/claude-history-mcp
 cd claude-history-mcp
 uv sync
 ```
@@ -37,15 +37,13 @@ uv sync
 pip install -e .
 ```
 
-### Add to Claude Code
+### Add to Claude Code (user scope)
 
 ```bash
-# Run directly (no install needed)
-claude mcp add claude-history -- uvx claude-history-mcp
-
-# Or if installed locally
-claude mcp add claude-history -- python -m claude_history_mcp.server
+claude mcp add claude-history --scope user -- uvx --from git+https://github.com/sydasif/claude-history-mcp claude-history-mcp
 ```
+
+This installs directly from GitHub via `uvx` — no PyPI publish needed. The `--scope user` flag makes the server available across all projects.
 
 ## Usage
 
