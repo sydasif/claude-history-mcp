@@ -1,12 +1,15 @@
 """Higher-level query functions on top of CacheManager, with date/filter support."""
 
 import json
-from datetime import UTC, datetime, timedelta, timezone
+import logging
+from datetime import UTC, datetime, timedelta
 
 import dateparser
 
 from .cache import CacheManager
 from .utils import parse_timestamp
+
+logger = logging.getLogger(__name__)
 
 
 class SearchEngine:
@@ -36,8 +39,14 @@ class SearchEngine:
             ]
 
         if from_date or to_date:
-            from_dt = self._parse_natural_date(from_date, start_of_day=True) if from_date else None
-            to_dt = self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+            from_dt = (
+                self._parse_natural_date(from_date, start_of_day=True)
+                if from_date
+                else None
+            )
+            to_dt = (
+                self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+            )
             filtered = []
             for s in sessions:
                 ts = parse_timestamp(s.get("last_timestamp"))
@@ -85,10 +94,18 @@ class SearchEngine:
 
         # Post-filter by tool_name and date (SQLite LIKE can't filter JSON tool_names)
         if tool_name:
-            results = [r for r in results if tool_name in (r.get("tool_names", "") or "")]
+            results = [
+                r for r in results if tool_name in (r.get("tool_names", "") or "")
+            ]
         if from_date or to_date:
-            from_dt = self._parse_natural_date(from_date, start_of_day=True) if from_date else None
-            to_dt = self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+            from_dt = (
+                self._parse_natural_date(from_date, start_of_day=True)
+                if from_date
+                else None
+            )
+            to_dt = (
+                self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+            )
             filtered = []
             for r in results:
                 ts = parse_timestamp(r.get("timestamp"))
@@ -145,14 +162,14 @@ class SearchEngine:
                     for t in tools:
                         tool_counts[t] = tool_counts.get(t, 0) + 1
                 except Exception:
-                    pass
+                    logger.exception("Failed to parse tool_names JSON")
             if msg.get("model"):
                 models_used.add(msg["model"])
             if msg.get("is_error"):
                 error_count += 1
 
         # Calculate duration
-        duration_minutes = 0
+        duration_minutes: float = 0
         if session.get("first_timestamp") and session.get("last_timestamp"):
             first = parse_timestamp(session["first_timestamp"])
             last = parse_timestamp(session["last_timestamp"])
@@ -180,11 +197,19 @@ class SearchEngine:
         limit: int = 50,
     ) -> list[dict]:
         """Search command history."""
-        results = self.cache.search_history(query=query, project=project, limit=limit * 2)
+        results = self.cache.search_history(
+            query=query, project=project, limit=limit * 2
+        )
 
         if from_date or to_date:
-            from_dt = self._parse_natural_date(from_date, start_of_day=True) if from_date else None
-            to_dt = self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+            from_dt = (
+                self._parse_natural_date(from_date, start_of_day=True)
+                if from_date
+                else None
+            )
+            to_dt = (
+                self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+            )
             filtered = []
             for r in results:
                 ts = datetime.fromtimestamp(r.get("timestamp_epoch", 0) / 1000, tz=UTC)
@@ -215,8 +240,11 @@ class SearchEngine:
     def _parse_natural_date(
         self, date_str: str, start_of_day: bool = False, end_of_day: bool = False
     ) -> datetime | None:
-        settings = {"TIMEZONE": "UTC", "RETURN_AS_TIMEZONE_AWARE": False}
-        dt = dateparser.parse(date_str, settings=settings)
+        settings: dict[str, str | bool] = {
+            "TIMEZONE": "UTC",
+            "RETURN_AS_TIMEZONE_AWARE": False,
+        }
+        dt: datetime | None = dateparser.parse(date_str, settings=settings)
         if dt:
             # Ensure naive UTC datetime for comparison with parse_timestamp results
             if dt.tzinfo is not None:

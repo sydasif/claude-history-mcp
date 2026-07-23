@@ -51,7 +51,6 @@ def load_jsonl_file(
     message_count = 0
     total_input = 0
     total_output = 0
-    skipped = 0
     errors = 0
     first_timestamp = None
     last_timestamp = None
@@ -59,7 +58,7 @@ def load_jsonl_file(
     summary = None
     ai_title = None
 
-    with open(file_path, encoding="utf-8", errors="replace") as f:
+    with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -72,7 +71,6 @@ def load_jsonl_file(
 
             entry = create_entry(data)
             if entry is None:
-                skipped += 1
                 continue
 
             # Extract metadata for session record
@@ -177,7 +175,7 @@ def load_history_file(file_path: Path, cache: CacheManager) -> int:
     files are).
     """
     commands = []
-    with open(file_path, encoding="utf-8", errors="replace") as f:
+    with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
             if not line:

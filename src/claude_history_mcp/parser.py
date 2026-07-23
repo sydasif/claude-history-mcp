@@ -41,7 +41,7 @@ def create_entry(data: dict[str, Any]) -> TranscriptEntry | None:
     model_class = ENTRY_CREATORS.get(entry_type)
     if model_class:
         try:
-            return model_class.model_validate(data)
+            return model_class.model_validate(data)  # type: ignore[return-value]
         except Exception:
             # Fallback: try BaseEntry for malformed specialized entries
             try:
@@ -99,7 +99,9 @@ def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> st
 def get_entry_text(entry: TranscriptEntry) -> str:
     """Get searchable text from any entry type."""
     if (
-        isinstance(entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry))
+        isinstance(
+            entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)
+        )
         and entry.message
     ):
         return extract_text(entry.message.content)
@@ -115,7 +117,9 @@ def get_entry_text(entry: TranscriptEntry) -> str:
 def get_entry_tokens(entry: TranscriptEntry) -> tuple[int, int]:
     """Get (input_tokens, output_tokens) from an entry."""
     msg = None
-    if isinstance(entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)):
+    if isinstance(
+        entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)
+    ):
         msg = entry.message
     if msg and msg.usage:
         return (msg.usage.input_tokens or 0, msg.usage.output_tokens or 0)

@@ -1,8 +1,17 @@
 """Claude History MCP Server — exposes session history as MCP tools."""
 
+from __future__ import annotations
+
 import json
+import logging
+from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
+
+if TYPE_CHECKING:
+    from .search import SearchEngine
+
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "Claude History",
@@ -10,10 +19,10 @@ mcp = FastMCP(
 )
 
 # Global search engine, initialized on first tool call
-_engine = None
+_engine: SearchEngine | None = None
 
 
-def _get_engine():
+def _get_engine() -> SearchEngine:
     global _engine
     if _engine is None:
         from . import initialize
@@ -23,7 +32,7 @@ def _get_engine():
 
 
 @mcp.tool
-def list_projects() -> list[dict]:
+def list_projects() -> list[dict[str, Any]]:
     """List all Claude Code projects with session counts and date ranges.
 
     Returns project paths, display names, message counts, and timestamp ranges.
@@ -41,7 +50,7 @@ def list_sessions(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List Claude Code sessions with summaries, timestamps, and token usage.
 
     Args:
@@ -52,7 +61,9 @@ def list_sessions(
     """
     try:
         engine = _get_engine()
-        return engine.list_sessions(project=project, from_date=from_date, to_date=to_date, limit=limit)
+        return engine.list_sessions(
+            project=project, from_date=from_date, to_date=to_date, limit=limit
+        )
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -67,7 +78,7 @@ def search_messages(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Search messages across all Claude Code sessions.
 
     Full-text search across user prompts, assistant responses, tool outputs,
@@ -103,7 +114,7 @@ def search_messages(
 def get_session(
     session_id: str,
     include_thinking: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Get full conversation transcript for a session.
 
     Returns the complete message history including user prompts,
@@ -138,14 +149,14 @@ def get_session(
                         raw["message"]["content"] = filtered
                         msg["raw_json"] = json.dumps(raw, ensure_ascii=False)
                     except Exception:
-                        pass
+                        logger.exception("Failed to filter thinking blocks")
         return result
     except Exception as e:
         return {"error": str(e)}
 
 
 @mcp.tool
-def get_session_stats(session_id: str) -> dict:
+def get_session_stats(session_id: str) -> dict[str, Any]:
     """Get token usage, tool call counts, and duration for a session.
 
     Args:
@@ -170,7 +181,7 @@ def search_history(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Search Claude Code command history (what you typed).
 
     Searches the global history.jsonl file containing all commands
@@ -197,7 +208,7 @@ def search_history(
 
 
 @mcp.tool
-def get_recent_activity(hours: int = 24, limit: int = 100) -> list[dict]:
+def get_recent_activity(hours: int = 24, limit: int = 100) -> list[dict[str, Any]]:
     """Get recent Claude Code activity across all projects.
 
     Shows the most recent messages (user prompts and assistant responses)
@@ -226,7 +237,9 @@ def get_projects_resource() -> str:
         lines.append(f"- **{p.get('display_name', p.get('project_path', 'unknown'))}**")
         lines.append(f"  Path: `{p.get('project_path', '')}`")
         lines.append(f"  Messages: {p.get('total_messages', 0)}")
-        lines.append(f"  Tokens: {p.get('total_input_tokens', 0)} in / {p.get('total_output_tokens', 0)} out")
+        lines.append(
+            f"  Tokens: {p.get('total_input_tokens', 0)} in / {p.get('total_output_tokens', 0)} out"
+        )
     return "\n".join(lines)
 
 
@@ -243,7 +256,7 @@ def get_history_resource() -> str:
     return "\n".join(lines)
 
 
-def main():
+def main() -> None:
     """Entry point for the MCP server."""
     mcp.run()
 

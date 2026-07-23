@@ -66,7 +66,7 @@ def discover_all_sessions(projects_dir: Path | None = None) -> list[SessionFileI
 def _extract_display_name(jsonl_path: Path) -> str | None:
     """Read the cwd field from the first line (of the first 20) that has one."""
     try:
-        with open(jsonl_path, encoding="utf-8", errors="replace") as f:
+        with Path(jsonl_path).open(encoding="utf-8", errors="replace") as f:
             for i, line in enumerate(f):
                 if i >= 20:
                     break
@@ -78,7 +78,7 @@ def _extract_display_name(jsonl_path: Path) -> str | None:
                 except json.JSONDecodeError:
                     continue
                 if data.get("cwd"):
-                    return data["cwd"]
+                    return str(data["cwd"])
     except OSError:
         pass
     return None

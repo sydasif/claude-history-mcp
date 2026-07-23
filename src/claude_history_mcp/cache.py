@@ -3,8 +3,9 @@
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Generator
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -116,13 +117,13 @@ class CacheManager:
             self._conn.executescript(SCHEMA)
         return self._conn
 
-    def close(self):
+    def close(self) -> None:
         if self._conn:
             self._conn.close()
             self._conn = None
 
     @contextmanager
-    def transaction(self):
+    def transaction(self) -> Generator[sqlite3.Connection, None, None]:
         conn = self.connect()
         try:
             yield conn
@@ -144,7 +145,7 @@ class CacheManager:
         row = conn.execute(
             "SELECT id FROM projects WHERE project_path=?", (project_path,)
         ).fetchone()
-        return row["id"]
+        return int(row["id"])
 
     def recompute_project_stats(self, project_id: int) -> None:
         """Roll session-level aggregates up to the parent project row."""
@@ -183,12 +184,14 @@ class CacheManager:
 
     def get_all_projects(self) -> list[dict]:
         rows = (
-            self.connect().execute("SELECT * FROM projects ORDER BY last_updated DESC").fetchall()
+            self.connect()
+            .execute("SELECT * FROM projects ORDER BY last_updated DESC")
+            .fetchall()
         )
         return [dict(r) for r in rows]
 
     # --- Session CRUD ---
-    def upsert_session(self, project_id: int, session_id: str, **kwargs) -> int:
+    def upsert_session(self, project_id: int, session_id: str, **kwargs: object) -> int:
         conn = self.connect()
         fields = ["project_id", "session_id"]
         values: list = [project_id, session_id]
@@ -214,11 +217,14 @@ class CacheManager:
             )
         conn.commit()
         row = conn.execute(
-            "SELECT id FROM sessions WHERE project_id=? AND session_id=?", (project_id, session_id)
+            "SELECT id FROM sessions WHERE project_id=? AND session_id=?",
+            (project_id, session_id),
         ).fetchone()
-        return row["id"]
+        return int(row["id"])
 
-    def get_sessions(self, project_id: int | None = None, limit: int = 100) -> list[dict]:
+    def get_sessions(
+        self, project_id: int | None = None, limit: int = 100
+    ) -> list[dict]:
         if project_id:
             rows = (
                 self.connect()
@@ -257,8 +263,12 @@ class CacheManager:
 
     # --- Message CRUD ---
     def insert_messages(
-        self, project_id: int, session_id: str, file_name: str, entries: list[dict]
-    ):
+        self,
+        project_id: int,
+        session_id: str,
+        file_name: str,
+        entries: list[dict[str, object]],
+    ) -> None:
         """Insert parsed entries into messages table."""
         conn = self.connect()
         conn.executemany(
@@ -334,12 +344,17 @@ class CacheManager:
         cur = conn.executemany(
             "INSERT OR IGNORE INTO history_commands (display, project, session_id, timestamp_epoch) "
             "VALUES (?, ?, ?, ?)",
-            [(c["display"], c["project"], c["sessionId"], c["timestamp"]) for c in commands],
+            [
+                (c["display"], c["project"], c["sessionId"], c["timestamp"])
+                for c in commands
+            ],
         )
         conn.commit()
         return cur.rowcount if cur.rowcount is not None else 0
 
-    def search_history(self, query: str, project: str | None = None, limit: int = 50) -> list[dict]:
+    def search_history(
+        self, query: str, project: str | None = None, limit: int = 50
+    ) -> list[dict]:
         sql = "SELECT * FROM history_commands WHERE display LIKE ?"
         params: list = [f"%{query}%"]
         if project:
@@ -361,7 +376,7 @@ class CacheManager:
         )
         return row["last_mtime"] if row else None
 
-    def set_file_mtime(self, file_path: str, mtime: float):
+    def set_file_mtime(self, file_path: str, mtime: float) -> None:
         conn = self.connect()
         conn.execute(
             "INSERT OR REPLACE INTO file_tracking (file_path, last_mtime, last_loaded) VALUES (?, ?, ?)",
@@ -379,22 +394,34 @@ class CacheManager:
                 changed.append(fp)
         return changed
 
-    def clear_project_messages(self, project_id: int, session_id: str | None = None):
+    def clear_project_messages(
+        self, project_id: int, session_id: str | None = None
+    ) -> None:
         """Clear messages for a project/session (for reparse)."""
         conn = self.connect()
         if session_id:
             conn.execute(
-                "DELETE FROM messages WHERE project_id=? AND session_id=?", (project_id, session_id)
+                "DELETE FROM messages WHERE project_id=? AND session_id=?",
+                (project_id, session_id),
             )
         else:
             conn.execute("DELETE FROM messages WHERE project_id=?", (project_id,))
         conn.commit()
 
     # --- Cache management ---
-    def clear_all(self):
+    # Order matters: child tables before parents for FK constraints.
+    _TABLE_NAMES = (
+        "messages",
+        "sessions",
+        "projects",
+        "history_commands",
+        "file_tracking",
+    )
+
+    def clear_all(self) -> None:
         conn = self.connect()
-        for table in ["messages", "sessions", "projects", "history_commands", "file_tracking"]:
-            conn.execute(f"DELETE FROM {table}")
+        for table in self._TABLE_NAMES:
+            conn.execute(f"DELETE FROM {table}")  # noqa: S608 — table names from whitelist
         conn.commit()
 
     def get_stats(self) -> dict:
@@ -403,5 +430,7 @@ class CacheManager:
             "projects": conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0],
             "sessions": conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0],
             "messages": conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0],
-            "history_commands": conn.execute("SELECT COUNT(*) FROM history_commands").fetchone()[0],
+            "history_commands": conn.execute(
+                "SELECT COUNT(*) FROM history_commands"
+            ).fetchone()[0],
         }

@@ -1,8 +1,8 @@
 """Pydantic models for Claude Code JSONL transcript entries and content blocks."""
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Content block types
@@ -10,11 +10,15 @@ from pydantic import BaseModel, Field
 
 
 class TextContent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     type: Literal["text"] = "text"
     text: str
 
 
 class ToolUseContent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     type: Literal["tool_use"] = "tool_use"
     id: str
     name: str
@@ -22,6 +26,8 @@ class ToolUseContent(BaseModel):
 
 
 class ToolResultContent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     type: Literal["tool_result"] = "tool_result"
     tool_use_id: str
     content: str | list[dict[str, Any]] = ""
@@ -29,18 +35,22 @@ class ToolResultContent(BaseModel):
 
 
 class ThinkingContent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     type: Literal["thinking"] = "thinking"
     thinking: str
     signature: str | None = None
 
 
 class ImageContent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     type: Literal["image"] = "image"
     source: dict[str, Any] = {}
 
 
 ContentItem = Annotated[
-    Union[TextContent, ToolUseContent, ToolResultContent, ThinkingContent, ImageContent],
+    TextContent | ToolUseContent | ToolResultContent | ThinkingContent | ImageContent,
     Field(discriminator="type"),
 ]
 
@@ -50,6 +60,8 @@ ContentItem = Annotated[
 
 
 class UsageInfo(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     input_tokens: int | None = None
     output_tokens: int | None = None
     cache_creation_input_tokens: int | None = None
@@ -59,6 +71,8 @@ class UsageInfo(BaseModel):
 
 
 class MessageModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     role: str
     content: list[ContentItem] = []
     model: str | None = None
@@ -85,6 +99,8 @@ SILENT_SKIP_TYPES = frozenset(
 
 
 class BaseEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     uuid: str | None = None
     parentUuid: str | None = None
     sessionId: str | None = None
@@ -110,7 +126,7 @@ class BaseEntry(BaseModel):
 class UserEntry(BaseEntry):
     type: Literal["user"] = "user"
     message: MessageModel | None = None
-    toolUseResult: str | list | dict | None = None
+    toolUseResult: str | list[Any] | dict[str, Any] | None = None
     promptId: str | None = None
 
 
@@ -165,6 +181,8 @@ class QueueOperationEntry(BaseEntry):
 
 
 class HistoryCommand(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     display: str
     pastedContents: dict[str, Any] = {}
     timestamp: int  # epoch milliseconds
