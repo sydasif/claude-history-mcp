@@ -1,0 +1,334 @@
+{
+  "metadata": {
+    "skill_name": "codebase-tidiness",
+    "skill_path": "/data/projects/claude-history-mcp/.claude/skills/codebase-tidiness",
+    "executor_model": "deepseek-v4-flash",
+    "timestamp": "2026-07-23T09:45:00Z",
+    "evals_run": [1, 2, 3],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "eval_name": "full-codebase-scan",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.8,
+        "passed": 4,
+        "failed": 1,
+        "total": 5,
+        "time_seconds": 180.0,
+        "tokens": 0,
+        "tool_calls": 37,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report includes 'epoch_ms_to_datetime' dead function",
+          "passed": false,
+          "evidence": "Missed it — report claimed 'No dead code found'"
+        },
+        {
+          "text": "Report flags fix-narrative docstring",
+          "passed": true,
+          "evidence": "Found stale fix-parenthetical in loader.py:220"
+        },
+        {
+          "text": "Report has file:line references",
+          "passed": true,
+          "evidence": "All findings use file:line format"
+        },
+        {
+          "text": "Report grouped by severity",
+          "passed": true,
+          "evidence": "HIGH/MEDIUM/LOW sections with summary table"
+        },
+        {
+          "text": "Report includes suggested fixes",
+          "passed": true,
+          "evidence": "Each finding has 'Suggested fix:' section"
+        }
+      ],
+      "notes": [
+        "Stronger severity classification than without-skill version",
+        "Found 16 findings vs 14 in without-skill",
+        "Better structured output with summary table",
+        "Missed epoch_ms_to_datetime (was already removed in working tree)"
+      ]
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "full-codebase-scan",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.8,
+        "passed": 4,
+        "failed": 1,
+        "total": 5,
+        "time_seconds": 252.0,
+        "tokens": 0,
+        "tool_calls": 37,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report includes 'epoch_ms_to_datetime' dead function",
+          "passed": false,
+          "evidence": "Missed it"
+        },
+        {
+          "text": "Report flags fix-narrative docstring",
+          "passed": true,
+          "evidence": "Found stale fix-parenthetical in loader.py:220"
+        },
+        {
+          "text": "Report has file:line references",
+          "passed": true,
+          "evidence": "All findings use file:line format"
+        },
+        {
+          "text": "Report grouped by severity",
+          "passed": true,
+          "evidence": "HIGH/MEDIUM/LOW sections"
+        },
+        {
+          "text": "Report includes suggested fixes",
+          "passed": true,
+          "evidence": "Each finding has 'Suggested fix:' section"
+        }
+      ],
+      "notes": [
+        "Similar pass rate but narrower scope (14 findings vs 16)",
+        "More conservative severity assignment",
+        "Took 252s vs 180s with-skill"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "stale-docstring-audit",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.2,
+        "passed": 1,
+        "failed": 4,
+        "total": 5,
+        "time_seconds": 107.0,
+        "tokens": 0,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Identifies recompute_project_stats fix-narrative",
+          "passed": false,
+          "evidence": "Claimed none found — missed because cleaned up in working tree"
+        },
+        {
+          "text": "Identifies search_messages fix-narrative",
+          "passed": false,
+          "evidence": "Same"
+        },
+        {
+          "text": "Identifies insert_history_commands fix-narrative",
+          "passed": false,
+          "evidence": "Same"
+        },
+        {
+          "text": "Identifies get_recent_activity fix-narrative",
+          "passed": false,
+          "evidence": "Not found"
+        },
+        {
+          "text": "Flags SQL LIKE vs FTS mislabel",
+          "passed": true,
+          "evidence": "Found in incomplete docstrings section"
+        }
+      ],
+      "notes": [
+        "Fastest run (107s) but also most incomplete",
+        "Went deep on missing docstrings (15 undocumented methods)",
+        "Found 4 real description/behavior mismatches in search.py",
+        "Expected fix-narratives were already cleaned up — eval needs updating"
+      ]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "stale-docstring-audit",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.2,
+        "passed": 1,
+        "failed": 4,
+        "total": 5,
+        "time_seconds": 150.0,
+        "tokens": 0,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Identifies recompute_project_stats fix-narrative",
+          "passed": false,
+          "evidence": "None found"
+        },
+        {
+          "text": "Identifies search_messages fix-narrative",
+          "passed": false,
+          "evidence": "Same"
+        },
+        {
+          "text": "Identifies insert_history_commands fix-narrative",
+          "passed": false,
+          "evidence": "Same"
+        },
+        {
+          "text": "Identifies get_recent_activity fix-narrative",
+          "passed": false,
+          "evidence": "Not found"
+        },
+        {
+          "text": "Flags SQL LIKE vs FTS mislabel",
+          "passed": true,
+          "evidence": "Found in incomplete docstrings"
+        }
+      ],
+      "notes": [
+        "Identical pass rate to with-skill",
+        "Also focused on missing/incomplete docstrings rather than fix-narratives",
+        "Both versions had the same blind spot"
+      ]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "dead-code-todo-sweep",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6,
+        "passed": 3,
+        "failed": 2,
+        "total": 5,
+        "time_seconds": 323.0,
+        "tokens": 0,
+        "tool_calls": 30,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Identifies epoch_ms_to_datetime as dead code",
+          "passed": false,
+          "evidence": "Claimed all vulture items were false positives"
+        },
+        {
+          "text": "Checks for commented-out code",
+          "passed": true,
+          "evidence": "Checked and reported zero found"
+        },
+        {
+          "text": "Checks for TODO/FIXME/HACK markers",
+          "passed": true,
+          "evidence": "Reported zero found with locations"
+        },
+        {
+          "text": "Evaluates marker actionability",
+          "passed": false,
+          "evidence": "No markers found, no evaluation"
+        },
+        {
+          "text": "Uses vulture or ruff",
+          "passed": true,
+          "evidence": "Attempted vulture (blocked) and ran ruff F401/F841/ERA/FIX/D"
+        }
+      ],
+      "notes": [
+        "Ran ruff across all selectors — found 165 issues",
+        "Identified SQL injection risks (S608) and bare except:pass patterns",
+        "Missed the specific dead function we wanted",
+        "Went very broad rather than focused on the eval ask"
+      ]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "dead-code-todo-sweep",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.4,
+        "passed": 2,
+        "failed": 3,
+        "total": 5,
+        "time_seconds": 514.0,
+        "tokens": 0,
+        "tool_calls": 53,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Identifies epoch_ms_to_datetime as dead code",
+          "passed": false,
+          "evidence": "Found LoadResult fields and ProjectInfo.dir_name but not epoch_ms_to_datetime"
+        },
+        {
+          "text": "Checks for commented-out code",
+          "passed": true,
+          "evidence": "Checked and reported none"
+        },
+        {
+          "text": "Checks for TODO/FIXME/HACK markers",
+          "passed": true,
+          "evidence": "Reported none found"
+        },
+        {
+          "text": "Evaluates marker actionability",
+          "passed": false,
+          "evidence": "No markers, no evaluation"
+        },
+        {
+          "text": "Uses vulture or ruff",
+          "passed": false,
+          "evidence": "No mention of running either tool"
+        }
+      ],
+      "notes": [
+        "Slowest run (514s)",
+        "Found genuinely unused LoadResult fields missed by with-skill version",
+        "Didn't run any automated tooling",
+        "Better at finding actual dead code in source"
+      ]
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": { "mean": 0.53, "stddev": 0.25, "min": 0.2, "max": 0.8 },
+      "time_seconds": { "mean": 203.3, "stddev": 88.9, "min": 107, "max": 323 },
+      "tokens": { "mean": 0, "stddev": 0, "min": 0, "max": 0 }
+    },
+    "without_skill": {
+      "pass_rate": { "mean": 0.47, "stddev": 0.25, "min": 0.2, "max": 0.8 },
+      "time_seconds": {
+        "mean": 305.3,
+        "stddev": 154.4,
+        "min": 150,
+        "max": 514
+      },
+      "tokens": { "mean": 0, "stddev": 0, "min": 0, "max": 0 }
+    },
+    "delta": {
+      "pass_rate": "+0.06",
+      "time_seconds": "-102.0",
+      "tokens": "+0"
+    }
+  },
+  "notes": [
+    "Eval 2 fix-narrative assertions failed across both versions because the expected docs were already cleaned up in the working tree — the eval was written against committed code",
+    "Eval 3 with-skill was broader (165 ruff violations found) but missed the specific dead function target",
+    "Eval 3 without-skill found genuine dead code (LoadResult fields) that with-skill missed entirely",
+    "Overall pass rates are close (0.53 vs 0.47), but with-skill ran faster (203s vs 305s average)",
+    "With-skill consistently used automated tooling (ruff), without-skill did not",
+    "Both versions showed the same blind spot on the epoch_ms_to_datetime function — neither checked for it specifically"
+  ]
+}

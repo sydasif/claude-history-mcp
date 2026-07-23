@@ -1,0 +1,35 @@
+{
+  "expectations": [
+    {
+      "text": "Report identifies the 'original blueprint' fix-narrative in cache.py's recompute_project_stats",
+      "passed": false,
+      "evidence": "Report states 'No stale fix-narratives found in either file.'"
+    },
+    {
+      "text": "Report identifies the 'original blueprint' fix-narrative in cache.py's search_messages",
+      "passed": false,
+      "evidence": "Same — 'None found'."
+    },
+    {
+      "text": "Report identifies the 'original blueprint' fix-narrative in cache.py's insert_history_commands",
+      "passed": false,
+      "evidence": "Same — 'None found'."
+    },
+    {
+      "text": "Report identifies the fix-narrative in search.py's get_recent_activity",
+      "passed": false,
+      "evidence": "Not found."
+    },
+    {
+      "text": "Report flags that search_messages uses SQL LIKE not FTS (mislabeled as 'Full-text search')",
+      "passed": true,
+      "evidence": "Section in incomplete docstrings identifies search_messages docstring as 'Substring search across messages' and flags the gap."
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 4,
+    "total": 5,
+    "pass_rate": 0.2
+  }
+}

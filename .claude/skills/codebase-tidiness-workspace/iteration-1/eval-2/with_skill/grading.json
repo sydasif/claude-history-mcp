@@ -1,0 +1,35 @@
+{
+  "expectations": [
+    {
+      "text": "Report identifies the 'original blueprint' fix-narrative in cache.py's recompute_project_stats",
+      "passed": false,
+      "evidence": "Report states 'Stale Fix-Narratives: None found' — missed because it was already cleaned up in working tree. Agent checked committed code but didn't examine git history."
+    },
+    {
+      "text": "Report identifies the 'original blueprint' fix-narrative in cache.py's search_messages",
+      "passed": false,
+      "evidence": "Same — 'None found' across both files. The search_messages docstring was rewritten to 'Substring search across messages' in working tree."
+    },
+    {
+      "text": "Report identifies the 'original blueprint' fix-narrative in cache.py's insert_history_commands",
+      "passed": false,
+      "evidence": "Same — 'None found'."
+    },
+    {
+      "text": "Report identifies the fix-narrative in search.py's get_recent_activity",
+      "passed": false,
+      "evidence": "Not found. Report focused heavily on missing docstrings (15 in cache.py) but didn't identify the spec 3.2 reference as a stale narrative."
+    },
+    {
+      "text": "Report flags that search_messages uses SQL LIKE not FTS (mislabeled as 'Full-text search')",
+      "passed": true,
+      "evidence": "Section 3.1 in report: 'The parameter is named role but the SQL maps it to entry_type'. Also notes incomplete docstring on search_messages."
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 4,
+    "total": 5,
+    "pass_rate": 0.2
+  }
+}
