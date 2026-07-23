@@ -45,6 +45,60 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 This installs directly from GitHub via `uvx` — no PyPI publish needed. The `--scope user` flag makes the server available across all projects.
 
+## Use Case Workflows
+
+Each tool solves a specific class of problem. Here's how to use them, mapped to real questions:
+
+| #   | You want to...                           | Use this tool                               | How                                                                                                                                                                      |
+| --- | ---------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **Browse everything you've worked on**   | `list_projects`                             | Returns all projects with session counts, token totals, and date ranges. Start here if you're exploring.                                                                 |
+| 2   | **Find what you did recently**           | `get_recent_activity`                       | `get_recent_activity(hours=24)` or `(hours=72)` — shows the latest messages across all projects in the time window. Great for "what was I doing yesterday?"              |
+| 3   | **Search for a specific topic or error** | `search_messages`                           | `search_messages(query="deploy script", project="my-project", role="user")` — full-text search with filters for project, role, tool name, and date.                      |
+| 4   | **Pull a full conversation transcript**  | `get_session`                               | `get_session(session_id="a7431e9a-...")` — get the complete message history with timestamps, tool calls, and results. Use for review, export, or feeding to another LLM. |
+| 5   | **Analyze session cost and tool usage**  | `get_session_stats`                         | `get_session_stats(session_id="a7431e9a-...")` — see token counts, tool-call breakdown, models used, errors, and duration.                                               |
+| 6   | **Find past commands you typed**         | `search_history`                            | `search_history(query="docker build", from_date="3 days ago")` — searches the global history of every `!` command across all sessions.                                   |
+| 7   | **Filter sessions by project or date**   | `list_sessions`                             | `list_sessions(project="my-project", from_date="last week")` — lists sessions with titles, summaries, timestamps, and token usage.                                       |
+| 8   | **Check what tools Claude used most**    | `get_session_stats` + `get_recent_activity` | Stats roll up tool call counts per session. Combine with recent activity for a complete picture.                                                                         |
+| 9   | **Count how many prompts you gave**      | `get_session` + role filter                 | Pull the transcript, then count entries with `entry_type == "user"`.                                                                                                     |
+
+### Workflow Examples
+
+#### Finding and Exporting a Past Session
+
+```
+list_sessions(project="my-project", from_date="yesterday")
+# → pick a session_id from results
+
+get_session(session_id="a7431e9a-48bb-44c9-b2cf-84121bf94917")
+# → full transcript for review or export
+```
+
+#### Debugging What Went Wrong
+
+```
+get_recent_activity(hours=48)
+# → see what you were working on
+
+search_messages(query="error", project="my-project")
+# → find errors across all conversations in that project
+
+get_session(session_id="a7431e9a-...", include_thinking=False)
+# → get the full context around the error
+```
+
+#### Understanding Usage Patterns
+
+```
+list_projects()
+# → see all projects and total token consumption
+
+get_session_stats(session_id="a7431e9a-...")
+# → drill into a specific session: tools used, models, errors
+
+list_sessions(from_date="last 7 days", limit=100)
+# → view all sessions from the past week with stats
+```
+
 ## Usage
 
 Once the server is running, Claude Code can use these tools:
@@ -159,18 +213,7 @@ claude-history-mcp/
 | `server.py`    | FastMCP server registering 7 tools and 2 resources                                 |
 | `utils.py`     | Surrogate character scrubbing, timestamp parsing, path helpers                     |
 
-## Edge Case Handling
-
-The parser handles numerous real-world edge cases found in Claude Code session data:
-
-- **Missing timestamps** (~21% of entries) — entries without timestamps always survive date filtering
-- **Surrogate characters** (U+D800–U+DFFF) — scrubbed before SQLite storage
-- **Dual session ID fields** — `sessionId` takes precedence, falls back to `session_id`
-- **Corrupted tool names** — truncated MCP names stored as-is, no normalization
-- **tool_result variants** — both `str` and `list[dict]` formats normalized to text
-- **API error entries** — flagged `is_error=True`, included in search results
-- **Unknown entry types** — with UUID retained as `BaseEntry`; without UUID skipped
-- **Incremental loading** — only changed JSONL files are reparsed (mtime-based)
+<!-- Edge case handling details are maintained in `.claude/CLAUDE.md` (Real-World Edge Cases) to keep a single source of truth. -->
 
 ## Development
 
