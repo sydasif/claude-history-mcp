@@ -188,7 +188,7 @@ def test_get_recent_activity_includes_null_timestamps(tmp_path):
         ],
     )
     result = engine.get_recent_activity(hours=24)
-    texts = {r["content_text"] for r in result}
+    texts = {r["text_preview"] for r in result}
     assert "recent one" in texts
     assert "no timestamp" in texts
 

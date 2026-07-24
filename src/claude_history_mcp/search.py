@@ -281,7 +281,33 @@ class SearchEngine:
             "ORDER BY (m.timestamp IS NULL) ASC, m.timestamp DESC LIMIT ?",
             (cutoff_str, limit),
         ).fetchall()
-        return [dict(r) for r in rows]
+
+        # Transform to include role and text_preview
+        formatted = []
+        for r in rows:
+            entry_type = r["entry_type"]
+            if entry_type == "user":
+                role = "user"
+            elif entry_type == "assistant":
+                role = "assistant"
+            elif entry_type == "system":
+                role = "system"
+            else:
+                role = entry_type or "unknown"
+
+            text = r["content_text"] or ""
+            formatted.append({
+                "session_id": r["session_id"],
+                "project": r["project_path"],
+                "timestamp": r["timestamp"],
+                "role": role,
+                "text_preview": text[:200] if text else "",
+                "tool_names": json.loads(r["tool_names"] or "[]"),
+                "model": r["model"],
+                "tokens_input": r["tokens_input"] or 0,
+                "tokens_output": r["tokens_output"] or 0,
+            })
+        return formatted[:limit]
 
     def _parse_natural_date(
         self, date_str: str, start_of_day: bool = False, end_of_day: bool = False
