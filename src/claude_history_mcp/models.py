@@ -6,7 +6,6 @@ This module re-exports library types and adds MCP-specific response models.
 from typing import Any
 from pydantic import BaseModel
 
-from claude_code_log.api import TranscriptEntry
 from claude_code_log.models import (
     UserTranscriptEntry as UserEntry,
     AssistantTranscriptEntry as AssistantEntry,

@@ -6,7 +6,14 @@ from pathlib import Path
 
 
 def scrub_surrogates(s: str | None) -> str | None:
-    """Replace lone surrogates with U+FFFD for safe SQLite storage."""
+    """Replace lone surrogates with U+FFFD for safe SQLite storage.
+
+    Args:
+        s: Input string that may contain lone surrogates.
+
+    Returns:
+        String with surrogates replaced by U+FFFD, or None if input was None.
+    """
     if s is None:
         return None
     s = re.sub(r"[\ud800-\udbff]", "\ufffd", s)
@@ -17,6 +24,12 @@ def parse_timestamp(ts: str | None) -> datetime | None:
     """Parse ISO 8601 timestamp to datetime. Returns None for missing/invalid.
 
     Returns naive UTC datetime for consistent comparison.
+
+    Args:
+        ts: ISO 8601 timestamp string (with or without Z suffix).
+
+    Returns:
+        Naive UTC datetime, or None if input is None or invalid.
     """
     if not ts:
         return None
@@ -31,16 +44,28 @@ def parse_timestamp(ts: str | None) -> datetime | None:
 
 
 def get_claude_dir() -> Path:
-    """Return ~/.claude directory."""
+    """Return ~/.claude directory.
+
+    Returns:
+        Path to the Claude Code directory.
+    """
     return Path.home() / ".claude"
 
 
 def get_projects_dir() -> Path:
-    """Return ~/.claude/projects directory."""
+    """Return ~/.claude/projects directory.
+
+    Returns:
+        Path to the Claude Code projects directory.
+    """
     return get_claude_dir() / "projects"
 
 
 def get_history_file() -> Path | None:
-    """Return ~/.claude/history.jsonl if it exists."""
+    """Return ~/.claude/history.jsonl if it exists.
+
+    Returns:
+        Path to the history file, or None if it doesn't exist.
+    """
     path = get_claude_dir() / "history.jsonl"
     return path if path.exists() else None

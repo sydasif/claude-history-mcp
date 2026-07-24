@@ -45,6 +45,8 @@ dev = [
     "ruff>=0.15.22",
     "vulture>=2.16",
     "mypy>=1.15",
+    "docsig>=0.91.8",
+    "docvet>=1.15.1",
 ]
 
 [tool.ruff.lint.per-file-ignores]

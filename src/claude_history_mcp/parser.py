@@ -1,7 +1,11 @@
 """Parse raw JSON dicts using claude-code-log library, extract searchable text."""
 
-from typing import Any
-from datetime import datetime
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 from claude_code_log.api import (
     create_transcript_entry,
@@ -25,19 +29,7 @@ from .models import (
     AiTitleEntry,
     AttachmentEntry,
     QueueOperationEntry,
-    ToolUseContent,
-    ToolResultContent,
 )
-
-ENTRY_CREATORS: dict[str, type[BaseEntry]] = {
-    "user": UserEntry,
-    "assistant": AssistantEntry,
-    "system": SystemEntry,
-    "summary": SummaryEntry,
-    "ai-title": AiTitleEntry,
-    "attachment": AttachmentEntry,
-    "queue-operation": QueueOperationEntry,
-}
 
 
 def create_entry(data: dict[str, Any]) -> BaseEntry | None:
@@ -72,7 +64,14 @@ def create_entry(data: dict[str, Any]) -> BaseEntry | None:
 
 
 def extract_text(content: "list[Any] | None") -> str:
-    """Extract all text content from a message's content blocks, including thinking and tool info."""
+    """Extract all text content from a message's content blocks, including thinking and tool info.
+
+    Args:
+        content: List of content items (TextContent, ThinkingContent, ToolUseContent, ToolResultContent).
+
+    Returns:
+        Concatenated text from all content blocks, with thinking and tool markers.
+    """
     if not content:
         return ""
     parts = []
@@ -89,14 +88,28 @@ def extract_text(content: "list[Any] | None") -> str:
 
 
 def extract_tool_names(content: "list[Any] | None") -> list[str]:
-    """Extract tool names from content blocks."""
+    """Extract tool names from content blocks.
+
+    Args:
+        content: List of content items.
+
+    Returns:
+        List of tool names found in the content.
+    """
     if not content:
         return []
     return [item.name for item in content if isinstance(item, ToolUseContent)]
 
 
 def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> str:
-    """Normalize tool_result content to a string."""
+    """Normalize tool_result content to a string.
+
+    Args:
+        content: Tool result content - either a string or list of content blocks.
+
+    Returns:
+        Normalized string representation of the tool result.
+    """
     if content is None:
         return ""
     if isinstance(content, str):
@@ -111,7 +124,14 @@ def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> st
 
 
 def get_entry_text(entry: BaseEntry) -> str:
-    """Get searchable text from any entry type."""
+    """Get searchable text from any entry type.
+
+    Args:
+        entry: Any transcript entry type.
+
+    Returns:
+        Extracted text content for search indexing.
+    """
     # Message-based entries
     if hasattr(entry, "message") and entry.message:
         return extract_text(entry.message.content)
@@ -132,7 +152,14 @@ def get_entry_text(entry: BaseEntry) -> str:
 
 
 def get_entry_tokens(entry: BaseEntry) -> tuple[int, int]:
-    """Get (input_tokens, output_tokens) from an entry."""
+    """Get (input_tokens, output_tokens) from an entry.
+
+    Args:
+        entry: Any transcript entry type.
+
+    Returns:
+        Tuple of (input_tokens, output_tokens). Returns (0, 0) if no usage info.
+    """
     if hasattr(entry, "message") and entry.message and entry.message.usage:
         usage = entry.message.usage
         return (usage.input_tokens or 0, usage.output_tokens or 0)
@@ -142,6 +169,10 @@ def get_entry_tokens(entry: BaseEntry) -> tuple[int, int]:
 def parse_timestamp(ts: str | None) -> datetime | None:
     """Parse ISO 8601 timestamp to datetime. Returns None for missing/invalid.
 
-    Returns naive UTC datetime for consistent comparison.
+    Args:
+        ts: ISO 8601 timestamp string (with or without Z suffix).
+
+    Returns:
+        Naive UTC datetime for consistent comparison, or None if missing/invalid.
     """
     return lib_parse_timestamp(ts)

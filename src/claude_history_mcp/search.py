@@ -12,6 +12,13 @@ from .utils import parse_timestamp
 logger = logging.getLogger(__name__)
 
 
+def _entry_type_to_role(entry_type: str | None) -> str:
+    """Map entry_type to a role string."""
+    if entry_type in ("user", "assistant", "system"):
+        return entry_type
+    return entry_type or "unknown"
+
+
 class SearchEngine:
     def __init__(self, cache: CacheManager):
         self.cache = cache
@@ -113,22 +120,13 @@ class SearchEngine:
                         continue
                     if to_dt and ts > to_dt:
                         continue
-                    filtered.append(r)
-                results = filtered
+                filtered.append(r)
+            results = filtered
 
         # Transform results to include role and text_preview
         formatted_results = []
         for r in results:
-            entry_type = r.get("entry_type")
-            if entry_type == "user":
-                role = "user"
-            elif entry_type == "assistant":
-                role = "assistant"
-            elif entry_type == "system":
-                role = "system"
-            else:
-                role = entry_type or "unknown"
-
+            role = _entry_type_to_role(r.get("entry_type"))
             text = r.get("content_text", "")
             formatted_results.append({
                 "session_id": r.get("session_id"),
@@ -167,16 +165,7 @@ class SearchEngine:
         # Transform messages to include role and text fields
         formatted_messages = []
         for msg in messages:
-            role = msg.get("entry_type")
-            if role == "user":
-                role = "user"
-            elif role == "assistant":
-                role = "assistant"
-            elif role == "system":
-                role = "system"
-            else:
-                role = role or "unknown"
-
+            role = _entry_type_to_role(msg.get("entry_type"))
             text = msg.get("content_text", "")
             formatted_messages.append({
                 "timestamp": msg.get("timestamp"),
@@ -285,16 +274,7 @@ class SearchEngine:
         # Transform to include role and text_preview
         formatted = []
         for r in rows:
-            entry_type = r["entry_type"]
-            if entry_type == "user":
-                role = "user"
-            elif entry_type == "assistant":
-                role = "assistant"
-            elif entry_type == "system":
-                role = "system"
-            else:
-                role = entry_type or "unknown"
-
+            role = _entry_type_to_role(r["entry_type"])
             text = r["content_text"] or ""
             formatted.append({
                 "session_id": r["session_id"],

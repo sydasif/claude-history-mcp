@@ -8,14 +8,14 @@ from claude_code_log.api import discover_projects as lib_discover_projects, find
 from .utils import get_projects_dir
 
 
-@dataclass
+@dataclass(slots=True)
 class ProjectInfo:
     display_name: str  # human-readable from cwd field
     path: Path  # full path to project dir
     jsonl_files: list[Path]
 
 
-@dataclass
+@dataclass(slots=True)
 class SessionFileInfo:
     session_id: str  # filename without .jsonl
     project: ProjectInfo

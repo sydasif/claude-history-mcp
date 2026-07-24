@@ -1,4 +1,7 @@
-"""SQLite cache layer for parsed transcript entries, sessions, and projects."""
+"""SQLite cache manager for parsed transcript entries, sessions, and projects.
+
+Provides thread-safe CRUD operations with WAL mode and connection pooling.
+"""
 
 import sqlite3
 import threading
@@ -102,12 +105,28 @@ _ALLOWED_SESSION_COLUMNS: frozenset[str] = frozenset(
 
 
 class CacheManager:
+    """Thread-safe SQLite cache manager for Claude Code session history.
+
+    Provides CRUD operations for projects, sessions, messages, and command history.
+    Uses WAL mode for concurrent access and connection pooling for performance.
+    """
+
     def __init__(self, db_path: Path):
+        """Initialize cache manager.
+
+        Args:
+            db_path: Path to SQLite database file.
+        """
         self.db_path = db_path
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()
 
     def connect(self) -> sqlite3.Connection:
+        """Get or create database connection with WAL mode enabled.
+
+        Returns:
+            SQLite connection with WAL mode, foreign keys, and row factory.
+        """
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
@@ -118,12 +137,18 @@ class CacheManager:
         return self._conn
 
     def close(self) -> None:
+        """Close database connection if open."""
         if self._conn:
             self._conn.close()
             self._conn = None
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager for atomic database transactions.
+
+        Yields:
+            Database connection with automatic commit on success or rollback on error.
+        """
         conn = self.connect()
         try:
             yield conn
@@ -134,6 +159,15 @@ class CacheManager:
 
     # --- Project CRUD ---
     def upsert_project(self, project_path: str, display_name: str) -> int:
+        """Insert or update a project record.
+
+        Args:
+            project_path: Absolute path to the project directory.
+            display_name: Human-readable project name.
+
+        Returns:
+            Database ID of the project.
+        """
         conn = self.connect()
         with self._lock:
             conn.execute(
@@ -148,7 +182,11 @@ class CacheManager:
         return int(row["id"])
 
     def recompute_project_stats(self, project_id: int) -> None:
-        """Roll session-level aggregates up to the parent project row."""
+        """Roll session-level aggregates up to the parent project row.
+
+        Args:
+            project_id: ID of the project to recompute stats for.
+        """
         conn = self.connect()
         row = conn.execute(
             "SELECT COALESCE(SUM(message_count), 0) AS total_messages, "

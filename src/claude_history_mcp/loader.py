@@ -1,25 +1,40 @@
 """Read JSONL files, parse using claude-code-log library, store searchable fields in our cache."""
 
 import json
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from claude_code_log.api import (
-    load_transcript,
-    load_directory_transcripts,
-    load_history_file as lib_load_history_file,
-    ensure_fresh_cache,
-    CacheManager as LibCacheManager,
-    SessionCacheData,
+    create_transcript_entry,
 )
 from .cache import CacheManager as OurCacheManager
 from .discovery import discover_projects, _extract_display_name
-from .utils import parse_timestamp
+from .parser import (
+    extract_text,
+    extract_tool_names,
+    get_entry_text,
+    get_entry_tokens,
+)
+from .utils import parse_timestamp, scrub_surrogates
+
+_SILENT_SKIP_TYPES: frozenset[str] = frozenset(
+    {
+        "file-history-snapshot",
+        "last-prompt",
+        "permission-mode",
+        "mode",
+        "custom-title",
+        "agent-name",
+        "agent-color",
+        "frame-link",
+        "file-history-delta",
+        "pr-link",
+    }
+)
 
 
-@dataclass
+@dataclass(slots=True)
 class LoadResult:
     session_id: str
     project_id: int
@@ -29,20 +44,6 @@ class LoadResult:
     message_count: int
     total_input_tokens: int
     total_output_tokens: int
-
-
-# Module-level cache for lib cache directory to avoid creating new temp dirs
-_lib_cache_dir: str | None = None
-_lib_cache_instance: LibCacheManager | None = None
-
-
-def _get_lib_cache() -> LibCacheManager:
-    """Get a library cache manager for parsing (uses temporary directory, reused)."""
-    global _lib_cache_dir, _lib_cache_instance
-    if _lib_cache_instance is None:
-        _lib_cache_dir = tempfile.mkdtemp(prefix="claude-history-lib-cache-")
-        _lib_cache_instance = LibCacheManager(Path(_lib_cache_dir), "1.5.0")
-    return _lib_cache_instance
 
 
 def load_jsonl_file(
@@ -63,10 +64,6 @@ def load_jsonl_file(
     cwd = None
     summary = None
 
-    # Read and parse lines manually for error tracking
-    import json
-    from claude_code_log.api import create_transcript_entry
-
     with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
             line = line.strip()
@@ -81,12 +78,7 @@ def load_jsonl_file(
             # Use library's create_transcript_entry to validate
             # Skip known types that library doesn't handle but we don't care about
             entry_type = data.get("type", "")
-            silent_skip_types = {
-                "file-history-snapshot", "last-prompt", "permission-mode",
-                "mode", "custom-title", "agent-name", "agent-color", "frame-link",
-                "file-history-delta", "pr-link",
-            }
-            if entry_type in silent_skip_types:
+            if entry_type in _SILENT_SKIP_TYPES:
                 continue
 
             # Use library's create_transcript_entry to validate
@@ -106,8 +98,8 @@ def load_jsonl_file(
                         last_timestamp = dt
 
             # Extract cwd from user messages
-            if hasattr(entry, "cwd") and entry.cwd and not cwd:
-                cwd = entry.cwd
+            if not cwd:
+                cwd = getattr(entry, "cwd", None) or None
 
             # Extract summary
             if entry.type == "summary" and hasattr(entry, "summary"):
@@ -115,7 +107,7 @@ def load_jsonl_file(
 
             # Extract first user message
             if entry.type == "user" and entry.message and not first_user_message:
-                text = _extract_text_from_entry(entry)
+                text = extract_text(entry.message.content)
                 if text and not text.startswith("<"):
                     first_user_message = text[:500]
 
@@ -124,20 +116,20 @@ def load_jsonl_file(
                 message_count += 1
 
             # Get tokens
-            inp, out = _get_tokens(entry)
+            inp, out = get_entry_tokens(entry)
             total_input += inp
             total_output += out
 
             # Build searchable record
-            text = _get_entry_text(entry)
-            tools = _extract_tools(entry)
+            text = get_entry_text(entry)
+            tools = extract_tool_names(entry.message.content) if hasattr(entry, "message") and entry.message else []
             model = None
             is_error = 0
             if entry.type == "assistant":
                 if entry.message and entry.message.model:
                     model = entry.message.model
                 # Library uses requestId instead of error field
-                if hasattr(entry, "requestId") and entry.requestId:
+                if getattr(entry, "requestId", None):
                     is_error = 1
 
             # Serialize entry to JSON
@@ -196,9 +188,6 @@ def load_jsonl_file(
 
 def load_history_file(file_path: Path, cache: OurCacheManager) -> int:
     """Parse history.jsonl and store commands in our cache."""
-    import json
-    from .utils import scrub_surrogates
-
     commands = []
     with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -266,48 +255,3 @@ def load_all_projects(
         results = load_project(project.path, cache, force=force)
         all_results.extend(results)
     return all_results
-
-
-def _extract_text_from_entry(entry) -> str:
-    """Extract text content from an entry's message."""
-    if not hasattr(entry, "message") or not entry.message:
-        return ""
-    if not hasattr(entry.message, "content") or not entry.message.content:
-        return ""
-    parts = []
-    for item in entry.message.content:
-        if hasattr(item, "type") and item.type == "text" and hasattr(item, "text"):
-            parts.append(item.text)
-    return "\n".join(parts)
-
-
-def _get_tokens(entry) -> tuple[int, int]:
-    """Get (input_tokens, output_tokens) from an entry."""
-    if hasattr(entry, "message") and entry.message and hasattr(entry.message, "usage") and entry.message.usage:
-        usage = entry.message.usage
-        return (usage.input_tokens or 0, usage.output_tokens or 0)
-    return (0, 0)
-
-
-def _get_entry_text(entry) -> str:
-    """Get searchable text from any entry type."""
-    if hasattr(entry, "message") and entry.message and hasattr(entry.message, "content") and entry.message.content:
-        return _extract_text_from_entry(entry)
-    if entry.type == "system" and hasattr(entry, "content") and entry.content:
-        return entry.content
-    if entry.type == "summary" and hasattr(entry, "summary"):
-        return entry.summary
-    if entry.type == "ai-title" and hasattr(entry, "aiTitle"):
-        return entry.aiTitle
-    return ""
-
-
-def _extract_tools(entry) -> list[str]:
-    """Extract tool names from an entry."""
-    if not hasattr(entry, "message") or not entry.message or not hasattr(entry.message, "content"):
-        return []
-    tools = []
-    for item in entry.message.content:
-        if hasattr(item, "type") and item.type == "tool_use" and hasattr(item, "name"):
-            tools.append(item.name)
-    return tools

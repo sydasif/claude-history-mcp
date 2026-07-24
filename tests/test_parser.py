@@ -248,15 +248,10 @@ def test_parse_timestamp_invalid():
 
 def test_attachment_and_queue_operation_registered():
     """Regression test: spec 2.3 lists `attachment` and `queue-operation` as
-    real entry types with dedicated models, but the original blueprint never
-    wired them into ENTRY_CREATORS."""
-    from claude_history_mcp.parser import ENTRY_CREATORS
+    real entry types that must be parseable by create_entry."""
     from claude_code_log.models import AttachmentTranscriptEntry, QueueOperationTranscriptEntry
 
-    assert ENTRY_CREATORS["attachment"] is AttachmentTranscriptEntry
-    assert ENTRY_CREATORS["queue-operation"] is QueueOperationTranscriptEntry
-
-    entry = create_entry(
+    attachment = create_entry(
         {
             "type": "attachment",
             "uuid": "att1",
@@ -270,4 +265,4 @@ def test_attachment_and_queue_operation_registered():
             "message": {"role": "user", "content": [{"type": "text", "text": "an attachment"}], "usage": None},
         }
     )
-    assert isinstance(entry, AttachmentTranscriptEntry)
+    assert isinstance(attachment, AttachmentTranscriptEntry)
