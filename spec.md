@@ -6,7 +6,11 @@ An MCP server that lets Claude Code query its own session history stored in `~/.
 
 **Stack**: Python 3.12+, FastMCP v3 (`fastmcp>=3.4`), Pydantic v2, SQLite, `uv` packaging.
 
----
+**Architecture**: Uses [claude-code-log](https://github.com/daaain/claude-code-log) as a library for all JSONL parsing. That library handles all real-world edge cases (surrogate chars, missing timestamps, dual sessionId/session_id, truncated tool names, tool_result variants, API errors). The MCP server focuses on:
+
+- SQLite cache with incremental mtime-based invalidation
+- Full-text search across all messages
+- MCP tool/resource exposure via FastMCP
 
 ## 2. JSONL Data Model
 
@@ -854,18 +858,22 @@ claude mcp add claude-history -- uvx claude-history-mcp
 
 ---
 
-## 16. What We Skip (vs claude-code-log)
+## 16. External Dependency
 
-| Feature                                    | Reason                                    |
-| ------------------------------------------ | ----------------------------------------- |
-| DAG tree building                          | Search doesn't need conversation trees    |
-| uuid/parentUuid chaining                   | Not needed for flat search                |
-| HTML/MD rendering                          | MCP returns structured JSON               |
-| Tool input/output typing (28+ models)      | Extract text directly from content blocks |
-| User message sub-classification (11 types) | Search raw text, no rendering distinction |
-| Subagent/sidechain splicing                | Skip agent files for v1                   |
-| TUI                                        | MCP is the interface                      |
-| Plugin system                              | Not needed                                |
-| Cross-session JunctionPoints               | Not needed for v1                         |
-| RenderingDepth system                      | Not needed                                |
-| Committed message pairing                  | Not needed for search                     |
+**claude-code-log** (via `claude_code_log.api`) provides all parsing, validation, and cache management:
+
+- `TranscriptEntry` types (User, Assistant, System, Summary, AiTitle, Attachment, QueueOperation, Base, Passthrough)
+- `ContentItem` discriminated union (Text, ToolUse, ToolResult, Thinking, Image)
+- `create_transcript_entry()` — validates raw JSON into typed entry
+- `extract_text_content()` — extracts searchable text from content blocks
+- `parse_timestamp()` — ISO 8601 parsing
+- `CacheManager`, `SessionCacheData` — their SQLite cache layer
+- `load_transcript()`, `load_directory_transcripts()` — core loading
+- `ensure_fresh_cache()` — cache refresh
+- `discover_projects()`, `find_history_file()`, `load_history_file()` — discovery
+
+Installed via: `claude-code-log @ git+https://github.com/sydasif/claude-code-log@add-library-api` (until upstream merges the library API PR)
+
+---
+
+## 17. What We Skip (vs claude-code-log)

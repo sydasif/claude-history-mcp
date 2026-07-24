@@ -14,6 +14,7 @@ Reads from `~/.claude/projects/**/*.jsonl` (session transcripts) and `~/.claude/
 - **🕐 Recent activity** — See what you've been working on across all projects in the last N hours
 - **⚡ Incremental caching** — SQLite-backed with mtime tracking; only reparses changed files on restart
 - **🔧 Natural language dates** — Use phrases like "yesterday", "last week" for all date filters
+- **📦 Library-backed** — Uses [claude-code-log](https://github.com/daaain/claude-code-log) library for robust parsing of real-world JSONL edge cases (surrogate chars, missing timestamps, truncated tool names, etc.)
 
 ## Prerequisites
 
@@ -44,6 +45,23 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 ```
 
 This installs directly from GitHub via `uvx` — no PyPI publish needed. The `--scope user` flag makes the server available across all projects.
+
+## Architecture
+
+This MCP server uses [claude-code-log](https://github.com/daaain/claude-code-log) as a library dependency for parsing Claude Code JSONL transcripts. That library handles all the real-world edge cases:
+
+- Surrogate character scrubbing (U+D800–U+DFFF)
+- Missing timestamps (~21% of entries)
+- Dual sessionId/session_id fields
+- Truncated MCP tool names
+- tool_result as string vs list[dict]
+- API error entries
+
+The MCP server itself focuses on:
+
+- SQLite cache with incremental mtime-based invalidation
+- Full-text search across all messages
+- MCP tool/resource exposure via FastMCP
 
 ## Use Case Workflows
 
@@ -182,15 +200,15 @@ claude-history-mcp/
 │   └── claude_history_mcp/
 │       ├── __init__.py         # Package init, cache path, initialize()
 │       ├── server.py           # FastMCP server with tools & resources
-│       ├── models.py           # Pydantic models for all transcript entry types
-│       ├── parser.py           # JSONL entry dispatch, text extraction helpers
+│       ├── models.py           # MCP response models (wraps library types)
+│       ├── parser.py           # Text extraction helpers (uses library)
 │       ├── cache.py            # SQLite cache layer (schema, CRUD, mtime tracking)
-│       ├── discovery.py        # File/project discovery under ~/.claude/projects/
+│       ├── discovery.py        # File/project discovery (uses library)
 │       ├── loader.py           # JSONL parsing pipeline → cache insertion
 │       ├── search.py           # Query engine — natural dates, filters, aggregation
 │       └── utils.py            # Surrogate scrubbing, timestamp parsing, path helpers
 └── tests/
-    ├── test_parser.py          # Entry parsing, text extraction unit tests
+    ├── test_parser.py          # Text extraction unit tests
     ├── test_server.py          # MCP tool/resource integration tests
     ├── test_cache.py
     ├── test_search.py
@@ -202,18 +220,18 @@ claude-history-mcp/
 
 ## Module Overview
 
-| Module         | Responsibility                                                                     |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `models.py`    | Typed Pydantic models for user/assistant/system/summary entries and content blocks |
-| `parser.py`    | Converts raw JSON dicts into typed models, extracts searchable text and tool names |
-| `cache.py`     | SQLite database — stores projects, sessions, messages, and command history         |
-| `discovery.py` | Scans `~/.claude/projects/` directories for JSONL session files                    |
-| `loader.py`    | Reads JSONL files, parses entries, inserts into cache with mtime tracking          |
-| `search.py`    | Higher-level query methods with natural-language date parsing and post-filtering   |
-| `server.py`    | FastMCP server registering 7 tools and 2 resources                                 |
-| `utils.py`     | Surrogate character scrubbing, timestamp parsing, path helpers                     |
+| Module         | Responsibility                                                                   |
+| -------------- | -------------------------------------------------------------------------------- |
+| `models.py`    | MCP response models (wraps library `TranscriptEntry` types)                      |
+| `parser.py`    | Text extraction helpers using library's `extract_text_content`                   |
+| `cache.py`     | SQLite database — stores projects, sessions, messages, and command history       |
+| `discovery.py` | Scans `~/.claude/projects/` directories for JSONL session files (uses library)   |
+| `loader.py`    | Reads JSONL files, parses via library, inserts into cache with mtime tracking    |
+| `search.py`    | Higher-level query methods with natural-language date parsing and post-filtering |
+| `server.py`    | FastMCP server registering 7 tools and 2 resources                               |
+| `utils.py`     | Surrogate character scrubbing, timestamp parsing, path helpers                   |
 
-<!-- Edge case handling details are maintained in `.claude/CLAUDE.md` (Real-World Edge Cases) to keep a single source of truth. -->
+**External dependency:** [claude-code-log](https://github.com/daaain/claude-code-log) provides `TranscriptEntry` types, parsing logic, and SQLite cache management.
 
 ## Development
 

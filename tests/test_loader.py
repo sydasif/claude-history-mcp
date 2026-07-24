@@ -18,21 +18,34 @@ def _sample_lines():
         {
             "type": "user",
             "uuid": "u1",
+            "sessionId": "sess1",
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
             "cwd": "/home/zulu/proj",
+            "version": "1.0",
             "timestamp": "2026-07-23T10:00:00Z",
-            "message": {"role": "user", "content": [{"type": "text", "text": "hello there"}]},
+            "message": {"role": "user", "content": [{"type": "text", "text": "hello there"}], "usage": None},
         },
         {
             "type": "assistant",
             "uuid": "a1",
+            "sessionId": "sess1",
+            "parentUuid": "u1",
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/home/zulu/proj",
+            "version": "1.0",
             "timestamp": "2026-07-23T10:01:00Z",
             "message": {
                 "id": "m1",
+                "type": "message",
                 "role": "assistant",
                 "model": "claude-sonnet-5",
                 "content": [{"type": "text", "text": "hi back"}],
                 "usage": {"input_tokens": 10, "output_tokens": 20},
             },
+            "requestId": "req-1",
         },
     ]
 
@@ -73,9 +86,16 @@ def test_load_jsonl_file_malformed_lines_skipped(tmp_path):
     cache = CacheManager(tmp_path / "db.sqlite")
     pid = cache.upsert_project("/a", "a")
     f = tmp_path / "bad.jsonl"
-    f.write_text('{"type": "user", "uuid": "u1"}\nnot json at all\n')
+    # First line is valid, second is not JSON
+    f.write_text(
+        '{"type": "user", "uuid": "u1", "sessionId": "s1", "parentUuid": null, '
+        '"isSidechain": false, "userType": "external", "cwd": "/tmp", "version": "1.0", '
+        '"timestamp": "2024-01-01T00:00:00Z", "message": {"role": "user", "content": [], "usage": null}}\n'
+        'not json at all\n'
+    )
     result = load_jsonl_file(f, cache, pid)
     assert result.error_entries == 1
+    assert result.message_count == 1
 
 
 def test_load_jsonl_file_extracts_first_user_message(tmp_path):
@@ -102,7 +122,21 @@ def test_load_jsonl_file_handles_missing_timestamps(tmp_path):
     cache = CacheManager(tmp_path / "db.sqlite")
     pid = cache.upsert_project("/a", "a")
     f = tmp_path / "sess1.jsonl"
-    _write_jsonl(f, [{"type": "user", "uuid": "u1", "message": {"role": "user", "content": []}}])
+    # Provide minimal required fields for library validation
+    _write_jsonl(f, [
+        {
+            "type": "user",
+            "uuid": "u1",
+            "sessionId": "sess1",
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/tmp",
+            "version": "1.0",
+            "timestamp": "2026-07-23T10:00:00Z",
+            "message": {"role": "user", "content": [], "usage": None}
+        }
+    ])
     result = load_jsonl_file(f, cache, pid)
     assert result.message_count == 1
 

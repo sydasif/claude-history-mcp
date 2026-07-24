@@ -1,27 +1,22 @@
-"""Read JSONL files, parse into typed entries, store searchable fields in cache."""
+"""Read JSONL files, parse using claude-code-log library, store searchable fields in our cache."""
 
 import json
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from .cache import CacheManager
-from .discovery import _extract_display_name, discover_projects
-from .models import (
-    AiTitleEntry,
-    AssistantEntry,
-    AttachmentEntry,
-    QueueOperationEntry,
-    SummaryEntry,
-    UserEntry,
+from claude_code_log.api import (
+    load_transcript,
+    load_directory_transcripts,
+    load_history_file as lib_load_history_file,
+    ensure_fresh_cache,
+    CacheManager as LibCacheManager,
+    SessionCacheData,
 )
-from .parser import (
-    create_entry,
-    extract_text,
-    extract_tool_names,
-    get_entry_text,
-    get_entry_tokens,
-)
-from .utils import get_projects_dir, parse_timestamp, scrub_surrogates
+from .cache import CacheManager as OurCacheManager
+from .discovery import discover_projects, _extract_display_name
+from .utils import parse_timestamp
 
 
 @dataclass
@@ -36,15 +31,26 @@ class LoadResult:
     total_output_tokens: int
 
 
-_MESSAGE_ENTRY_TYPES = (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)
+# Module-level cache for lib cache directory to avoid creating new temp dirs
+_lib_cache_dir: str | None = None
+_lib_cache_instance: LibCacheManager | None = None
+
+
+def _get_lib_cache() -> LibCacheManager:
+    """Get a library cache manager for parsing (uses temporary directory, reused)."""
+    global _lib_cache_dir, _lib_cache_instance
+    if _lib_cache_instance is None:
+        _lib_cache_dir = tempfile.mkdtemp(prefix="claude-history-lib-cache-")
+        _lib_cache_instance = LibCacheManager(Path(_lib_cache_dir), "1.5.0")
+    return _lib_cache_instance
 
 
 def load_jsonl_file(
     file_path: Path,
-    cache: CacheManager,
+    cache: OurCacheManager,
     project_id: int,
 ) -> LoadResult:
-    """Parse a single JSONL file and store in cache."""
+    """Parse a single JSONL file using claude-code-log library and store in our cache."""
     session_id = file_path.stem
     parsed_entries = []
     first_user_message = ""
@@ -56,7 +62,10 @@ def load_jsonl_file(
     last_timestamp = None
     cwd = None
     summary = None
-    ai_title = None
+
+    # Read and parse lines manually for error tracking
+    import json
+    from claude_code_log.api import create_transcript_entry
 
     with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -69,71 +78,92 @@ def load_jsonl_file(
                 errors += 1
                 continue
 
-            entry = create_entry(data)
+            # Use library's create_transcript_entry to validate
+            # Skip known types that library doesn't handle but we don't care about
+            entry_type = data.get("type", "")
+            silent_skip_types = {
+                "file-history-snapshot", "last-prompt", "permission-mode",
+                "mode", "custom-title", "agent-name", "agent-color", "frame-link",
+                "file-history-delta", "pr-link",
+            }
+            if entry_type in silent_skip_types:
+                continue
+
+            # Use library's create_transcript_entry to validate
+            entry = create_transcript_entry(data)
             if entry is None:
+                errors += 1
                 continue
 
             # Extract metadata for session record
-            ts = parse_timestamp(entry.timestamp)
+            ts = getattr(entry, "timestamp", None)
             if ts:
-                if first_timestamp is None or ts < first_timestamp:
-                    first_timestamp = ts
-                if last_timestamp is None or ts > last_timestamp:
-                    last_timestamp = ts
+                dt = parse_timestamp(ts)
+                if dt:
+                    if first_timestamp is None or dt < first_timestamp:
+                        first_timestamp = dt
+                    if last_timestamp is None or dt > last_timestamp:
+                        last_timestamp = dt
 
-            if isinstance(entry, UserEntry):
-                if not cwd and entry.cwd:
-                    cwd = entry.cwd
-                if entry.message and not first_user_message:
-                    text = extract_text(entry.message.content)
-                    if text and not text.startswith("<"):
-                        first_user_message = text[:500]
+            # Extract cwd from user messages
+            if hasattr(entry, "cwd") and entry.cwd and not cwd:
+                cwd = entry.cwd
 
-            inp, out = 0, 0
-            if isinstance(entry, _MESSAGE_ENTRY_TYPES):
-                message_count += 1
-                inp, out = get_entry_tokens(entry)
-                total_input += inp
-                total_output += out
-
-            if isinstance(entry, SummaryEntry):
+            # Extract summary
+            if entry.type == "summary" and hasattr(entry, "summary"):
                 summary = entry.summary
 
-            if isinstance(entry, AiTitleEntry):
-                ai_title = entry.aiTitle
+            # Extract first user message
+            if entry.type == "user" and entry.message and not first_user_message:
+                text = _extract_text_from_entry(entry)
+                if text and not text.startswith("<"):
+                    first_user_message = text[:500]
+
+            # Count message entries
+            if entry.type in ("user", "assistant", "attachment", "queue-operation"):
+                message_count += 1
+
+            # Get tokens
+            inp, out = _get_tokens(entry)
+            total_input += inp
+            total_output += out
 
             # Build searchable record
-            text = get_entry_text(entry)
-            tools: list[str] = []
-            if isinstance(entry, _MESSAGE_ENTRY_TYPES) and entry.message:
-                tools = extract_tool_names(entry.message.content)
-
+            text = _get_entry_text(entry)
+            tools = _extract_tools(entry)
             model = None
             is_error = 0
-            if isinstance(entry, AssistantEntry):
-                if entry.message:
+            if entry.type == "assistant":
+                if entry.message and entry.message.model:
                     model = entry.message.model
-                if entry.error:
+                # Library uses requestId instead of error field
+                if hasattr(entry, "requestId") and entry.requestId:
                     is_error = 1
+
+            # Serialize entry to JSON
+            try:
+                raw_json = json.dumps(entry.model_dump() if hasattr(entry, "model_dump") else str(entry), ensure_ascii=False)
+            except Exception:
+                raw_json = str(entry)
 
             parsed_entries.append(
                 {
                     "entry_type": entry.type,
-                    "timestamp": scrub_surrogates(entry.timestamp),
-                    "uuid": entry.uuid,
+                    "timestamp": getattr(entry, "timestamp", None),
+                    "uuid": getattr(entry, "uuid", None),
                     "parent_uuid": getattr(entry, "parentUuid", None),
                     "is_sidechain": 1 if getattr(entry, "isSidechain", False) else 0,
-                    "content_text": scrub_surrogates(text),
+                    "content_text": text,
                     "tool_names": json.dumps(tools),
                     "model": model,
                     "tokens_input": inp,
                     "tokens_output": out,
                     "is_error": is_error,
-                    "raw_json": json.dumps(data, ensure_ascii=False),
+                    "raw_json": raw_json,
                 }
             )
 
-    # Store in cache
+    # Store in our cache
     if parsed_entries:
         cache.insert_messages(project_id, session_id, file_path.name, parsed_entries)
 
@@ -141,14 +171,12 @@ def load_jsonl_file(
     cache.upsert_session(
         project_id,
         session_id,
-        summary=scrub_surrogates(summary),
-        ai_title=scrub_surrogates(ai_title),
+        summary=summary,
+        ai_title=None,  # We don't have ai-title yet
         first_timestamp=first_timestamp.isoformat() if first_timestamp else None,
         last_timestamp=last_timestamp.isoformat() if last_timestamp else None,
         message_count=message_count,
-        first_user_message=scrub_surrogates(
-            first_user_message[:500] if first_user_message else None
-        ),
+        first_user_message=first_user_message[:500] if first_user_message else None,
         cwd=cwd,
         total_input_tokens=total_input,
         total_output_tokens=total_output,
@@ -166,14 +194,11 @@ def load_jsonl_file(
     )
 
 
-def load_history_file(file_path: Path, cache: CacheManager) -> int:
-    """Parse history.jsonl and store commands. Returns count of *new* rows inserted.
+def load_history_file(file_path: Path, cache: OurCacheManager) -> int:
+    """Parse history.jsonl and store commands in our cache."""
+    import json
+    from .utils import scrub_surrogates
 
-    Idempotent: relies on the UNIQUE constraint + INSERT OR IGNORE in
-    CacheManager.insert_history_commands, since history.jsonl is append-only
-    and reloaded on every server start (it isn't mtime-tracked like session
-    files are).
-    """
     commands = []
     with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -199,7 +224,7 @@ def load_history_file(file_path: Path, cache: CacheManager) -> int:
 
 def load_project(
     project_path: Path,
-    cache: CacheManager,
+    cache: OurCacheManager,
     force: bool = False,
 ) -> list[LoadResult]:
     """Load all JSONL files in a project directory, reparsing only changed files."""
@@ -218,31 +243,71 @@ def load_project(
 
     results = []
     for jsonl_file in files_to_load:
-        # Clear old messages for this file's session before reloading, so
-        # re-running load doesn't duplicate rows.
+        # Clear old messages for this session before reloading
         cache.clear_project_messages(project_id, session_id=jsonl_file.stem)
         result = load_jsonl_file(jsonl_file, cache, project_id)
         cache.set_file_mtime(str(jsonl_file), jsonl_file.stat().st_mtime)
         results.append(result)
 
-    # Roll session aggregates up to the project row (fix: previously never
-    # written, so list_projects() always reported zero messages/tokens).
+    # Roll session aggregates up to the project row
     cache.recompute_project_stats(project_id)
 
     return results
 
 
 def load_all_projects(
-    cache: CacheManager,
+    cache: OurCacheManager,
     projects_dir: Path | None = None,
     force: bool = False,
 ) -> list[LoadResult]:
     """Load all projects into cache."""
-    if projects_dir is None:
-        projects_dir = get_projects_dir()
-
     all_results = []
     for project in discover_projects(projects_dir):
         results = load_project(project.path, cache, force=force)
         all_results.extend(results)
     return all_results
+
+
+def _extract_text_from_entry(entry) -> str:
+    """Extract text content from an entry's message."""
+    if not hasattr(entry, "message") or not entry.message:
+        return ""
+    if not hasattr(entry.message, "content") or not entry.message.content:
+        return ""
+    parts = []
+    for item in entry.message.content:
+        if hasattr(item, "type") and item.type == "text" and hasattr(item, "text"):
+            parts.append(item.text)
+    return "\n".join(parts)
+
+
+def _get_tokens(entry) -> tuple[int, int]:
+    """Get (input_tokens, output_tokens) from an entry."""
+    if hasattr(entry, "message") and entry.message and hasattr(entry.message, "usage") and entry.message.usage:
+        usage = entry.message.usage
+        return (usage.input_tokens or 0, usage.output_tokens or 0)
+    return (0, 0)
+
+
+def _get_entry_text(entry) -> str:
+    """Get searchable text from any entry type."""
+    if hasattr(entry, "message") and entry.message and hasattr(entry.message, "content") and entry.message.content:
+        return _extract_text_from_entry(entry)
+    if entry.type == "system" and hasattr(entry, "content") and entry.content:
+        return entry.content
+    if entry.type == "summary" and hasattr(entry, "summary"):
+        return entry.summary
+    if entry.type == "ai-title" and hasattr(entry, "aiTitle"):
+        return entry.aiTitle
+    return ""
+
+
+def _extract_tools(entry) -> list[str]:
+    """Extract tool names from an entry."""
+    if not hasattr(entry, "message") or not entry.message or not hasattr(entry.message, "content"):
+        return []
+    tools = []
+    for item in entry.message.content:
+        if hasattr(item, "type") and item.type == "tool_use" and hasattr(item, "name"):
+            tools.append(item.name)
+    return tools

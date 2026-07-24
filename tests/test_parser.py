@@ -1,11 +1,22 @@
-from claude_history_mcp.models import (
-    AiTitleEntry,
-    AssistantEntry,
-    BaseEntry,
-    SummaryEntry,
-    SystemEntry,
-    UserEntry,
+"""Tests for parser using claude-code-log library models."""
+
+from claude_code_log.api import create_transcript_entry
+from claude_code_log.models import (
+    UserTranscriptEntry as UserEntry,
+    AssistantTranscriptEntry as AssistantEntry,
+    SystemTranscriptEntry as SystemEntry,
+    SummaryTranscriptEntry as SummaryEntry,
+    AiTitleTranscriptEntry as AiTitleEntry,
+    AttachmentTranscriptEntry as AttachmentEntry,
+    QueueOperationTranscriptEntry as QueueOperationEntry,
+    BaseTranscriptEntry as BaseEntry,
+    TextContent,
+    ToolUseContent,
+    ToolResultContent,
+    ThinkingContent,
+    ImageContent,
 )
+
 from claude_history_mcp.parser import (
     create_entry,
     extract_text,
@@ -18,55 +29,119 @@ from claude_history_mcp.utils import parse_timestamp
 
 
 def test_create_entry_user():
-    assert isinstance(create_entry({"type": "user", "uuid": "u1"}), UserEntry)
+    entry = create_entry({
+        "type": "user",
+        "uuid": "u1",
+        "sessionId": "s1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "userType": "external",
+        "cwd": "/tmp",
+        "version": "1.0",
+        "timestamp": "2024-01-01T00:00:00Z",
+        "message": {"role": "user", "content": [], "usage": None}
+    })
+    assert isinstance(entry, UserEntry)
 
 
 def test_create_entry_assistant():
-    assert isinstance(create_entry({"type": "assistant", "uuid": "a1"}), AssistantEntry)
+    entry = create_entry({
+        "type": "assistant",
+        "uuid": "a1",
+        "sessionId": "s1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "userType": "external",
+        "cwd": "/tmp",
+        "version": "1.0",
+        "timestamp": "2024-01-01T00:00:00Z",
+        "message": {"id": "msg-1", "type": "message", "role": "assistant", "content": [], "model": "claude-3", "usage": None},
+        "requestId": "req-1"
+    })
+    assert isinstance(entry, AssistantEntry)
 
 
 def test_create_entry_system():
-    assert isinstance(create_entry({"type": "system", "uuid": "s1"}), SystemEntry)
+    entry = create_entry({
+        "type": "system",
+        "uuid": "s1",
+        "sessionId": "s1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "userType": "external",
+        "cwd": "/tmp",
+        "version": "1.0",
+        "timestamp": "2024-01-01T00:00:00Z",
+        "content": "system message",
+    })
+    assert isinstance(entry, SystemEntry)
 
 
 def test_create_entry_summary():
-    assert isinstance(create_entry({"type": "summary", "summary": "x"}), SummaryEntry)
+    entry = create_entry({
+        "type": "summary",
+        "summary": "x",
+        "leafUuid": "leaf-1",
+    })
+    assert isinstance(entry, SummaryEntry)
 
 
 def test_create_entry_ai_title():
-    assert isinstance(create_entry({"type": "ai-title", "aiTitle": "x"}), AiTitleEntry)
+    entry = create_entry({
+        "type": "ai-title",
+        "aiTitle": "x",
+        "sessionId": "s1",
+    })
+    assert isinstance(entry, AiTitleEntry)
 
 
 def test_create_entry_skip_file_history_snapshot():
-    assert create_entry({"type": "file-history-snapshot"}) is None
+    entry = create_entry({
+        "type": "file-history-snapshot",
+    })
+    assert entry is None
 
 
 def test_create_entry_skip_mode():
-    assert create_entry({"type": "mode"}) is None
+    entry = create_entry({
+        "type": "mode",
+    })
+    assert entry is None
 
 
 def test_create_entry_unknown_with_uuid():
-    entry = create_entry({"type": "some-future-type", "uuid": "x1"})
-    assert isinstance(entry, BaseEntry)
+    entry = create_entry({
+        "type": "some-future-type",
+        "uuid": "x1",
+        "sessionId": "s1",
+        "parentUuid": None,
+        "isSidechain": False,
+    })
+    # Unknown types with uuid become PassthroughTranscriptEntry from library
+    from claude_code_log.models import PassthroughTranscriptEntry
+    assert isinstance(entry, PassthroughTranscriptEntry)
 
 
 def test_create_entry_unknown_without_uuid():
-    assert create_entry({"type": "some-future-type"}) is None
+    entry = create_entry({
+        "type": "some-future-type",
+    })
+    assert entry is None
 
 
 def test_create_entry_malformed_user_falls_back():
-    # message is wrong shape entirely -> should fall back to BaseEntry, not raise
-    entry = create_entry({"type": "user", "uuid": "u1", "message": "not-a-dict"})
+    # message is wrong shape entirely -> should fall back to PassthroughTranscriptEntry, not raise
+    entry = create_entry({"type": "user", "uuid": "u1", "sessionId": "s1", "message": "not-a-dict"})
+    from claude_code_log.models import PassthroughTranscriptEntry
     assert entry is not None
+    assert isinstance(entry, PassthroughTranscriptEntry)
 
 
 def test_extract_text_mixed_blocks():
-    from claude_history_mcp.models import TextContent, ThinkingContent, ToolUseContent
-
     content = [
-        TextContent(text="hello"),
-        ThinkingContent(thinking="pondering"),
-        ToolUseContent(id="t1", name="Bash", input={}),
+        TextContent(type="text", text="hello"),
+        ThinkingContent(type="thinking", thinking="pondering"),
+        ToolUseContent(type="tool_use", id="t1", name="Bash", input={}),
     ]
     text = extract_text(content)
     assert "hello" in text
@@ -79,11 +154,9 @@ def test_extract_text_none():
 
 
 def test_extract_tool_names():
-    from claude_history_mcp.models import ToolUseContent
-
     content = [
-        ToolUseContent(id="t1", name="Bash", input={}),
-        ToolUseContent(id="t2", name="Read", input={}),
+        ToolUseContent(type="tool_use", id="t1", name="Bash", input={}),
+        ToolUseContent(type="tool_use", id="t2", name="Read", input={}),
     ]
     assert extract_tool_names(content) == ["Bash", "Read"]
 
@@ -105,27 +178,57 @@ def test_extract_tool_result_text_none():
 
 
 def test_get_entry_text_each_type():
-    assert get_entry_text(SummaryEntry(summary="s")) == "s"
-    assert get_entry_text(AiTitleEntry(aiTitle="t")) == "t"
-    assert get_entry_text(SystemEntry(type="system", content="c")) == "c"
+    # Summary entry
+    entry = SummaryEntry(type="summary", summary="s", leafUuid="leaf-1")
+    assert get_entry_text(entry) == "s"
+
+    # AiTitle entry
+    entry = AiTitleEntry(type="ai-title", aiTitle="t", sessionId="s1")
+    assert get_entry_text(entry) == "t"
+
+    # System entry
+    entry = SystemEntry(
+        type="system", content="c",
+        uuid="u1", sessionId="s1", parentUuid=None,
+        isSidechain=False, userType="external", cwd="/tmp",
+        version="1.0", timestamp="2024-01-01T00:00:00Z"
+    )
+    assert get_entry_text(entry) == "c"
 
 
 def test_get_entry_tokens():
-    entry = UserEntry.model_validate(
-        {
-            "type": "user",
-            "message": {
-                "role": "user",
-                "content": [],
-                "usage": {"input_tokens": 10, "output_tokens": 5},
-            },
+    entry = UserEntry(
+        type="user",
+        uuid="u1",
+        sessionId="s1",
+        parentUuid=None,
+        isSidechain=False,
+        userType="external",
+        cwd="/tmp",
+        version="1.0",
+        timestamp="2024-01-01T00:00:00Z",
+        message={
+            "role": "user",
+            "content": [],
+            "usage": {"input_tokens": 10, "output_tokens": 5},
         }
     )
     assert get_entry_tokens(entry) == (10, 5)
 
 
 def test_get_entry_tokens_no_usage():
-    entry = UserEntry.model_validate({"type": "user", "message": {"role": "user", "content": []}})
+    entry = UserEntry(
+        type="user",
+        uuid="u1",
+        sessionId="s1",
+        parentUuid=None,
+        isSidechain=False,
+        userType="external",
+        cwd="/tmp",
+        version="1.0",
+        timestamp="2024-01-01T00:00:00Z",
+        message={"role": "user", "content": []}
+    )
     assert get_entry_tokens(entry) == (0, 0)
 
 
@@ -147,18 +250,24 @@ def test_attachment_and_queue_operation_registered():
     """Regression test: spec 2.3 lists `attachment` and `queue-operation` as
     real entry types with dedicated models, but the original blueprint never
     wired them into ENTRY_CREATORS."""
-    from claude_history_mcp.models import AttachmentEntry, QueueOperationEntry
     from claude_history_mcp.parser import ENTRY_CREATORS
+    from claude_code_log.models import AttachmentTranscriptEntry, QueueOperationTranscriptEntry
 
-    assert ENTRY_CREATORS["attachment"] is AttachmentEntry
-    assert ENTRY_CREATORS["queue-operation"] is QueueOperationEntry
+    assert ENTRY_CREATORS["attachment"] is AttachmentTranscriptEntry
+    assert ENTRY_CREATORS["queue-operation"] is QueueOperationTranscriptEntry
 
     entry = create_entry(
         {
             "type": "attachment",
             "uuid": "att1",
-            "message": {"role": "user", "content": [{"type": "text", "text": "an attachment"}]},
+            "sessionId": "s1",
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/tmp",
+            "version": "1.0",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "message": {"role": "user", "content": [{"type": "text", "text": "an attachment"}], "usage": None},
         }
     )
-    assert isinstance(entry, AttachmentEntry)
-    assert get_entry_text(entry) == "an attachment"
+    assert isinstance(entry, AttachmentTranscriptEntry)

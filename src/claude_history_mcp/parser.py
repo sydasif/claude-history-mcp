@@ -1,28 +1,35 @@
-"""Parse raw JSON dicts into typed transcript entry models, extract searchable text."""
+"""Parse raw JSON dicts using claude-code-log library, extract searchable text."""
 
 from typing import Any
+from datetime import datetime
 
-from pydantic import BaseModel
+from claude_code_log.api import (
+    create_transcript_entry,
+    parse_timestamp as lib_parse_timestamp,
+)
+
+from claude_code_log.models import (
+    TextContent,
+    ThinkingContent,
+    ToolUseContent,
+    ToolResultContent,
+)
 
 from .models import (
     SILENT_SKIP_TYPES,
-    AiTitleEntry,
-    AssistantEntry,
-    AttachmentEntry,
     BaseEntry,
-    ContentItem,
-    QueueOperationEntry,
-    SummaryEntry,
-    SystemEntry,
-    TextContent,
-    ThinkingContent,
-    ToolResultContent,
-    ToolUseContent,
-    TranscriptEntry,
     UserEntry,
+    AssistantEntry,
+    SystemEntry,
+    SummaryEntry,
+    AiTitleEntry,
+    AttachmentEntry,
+    QueueOperationEntry,
+    ToolUseContent,
+    ToolResultContent,
 )
 
-ENTRY_CREATORS: dict[str, type[BaseModel]] = {
+ENTRY_CREATORS: dict[str, type[BaseEntry]] = {
     "user": UserEntry,
     "assistant": AssistantEntry,
     "system": SystemEntry,
@@ -33,32 +40,39 @@ ENTRY_CREATORS: dict[str, type[BaseModel]] = {
 }
 
 
-def create_entry(data: dict[str, Any]) -> TranscriptEntry | None:
+def create_entry(data: dict[str, Any]) -> BaseEntry | None:
     """Parse raw JSON dict into typed model. Returns None for skip types."""
     entry_type = data.get("type", "")
     if entry_type in SILENT_SKIP_TYPES:
         return None
-    model_class = ENTRY_CREATORS.get(entry_type)
-    if model_class:
-        try:
-            return model_class.model_validate(data)  # type: ignore[return-value]
-        except Exception:
-            # Fallback: try BaseEntry for malformed specialized entries
+
+    # Use library's create_transcript_entry for proper validation
+    try:
+        return create_transcript_entry(data)
+    except Exception:
+        # Malformed data - create a PassthroughTranscriptEntry to keep it searchable
+        if data.get("uuid") and data.get("sessionId"):
+            from claude_code_log.models import PassthroughTranscriptEntry
+            return PassthroughTranscriptEntry(
+                uuid=data["uuid"],
+                parentUuid=data.get("parentUuid"),
+                sessionId=data["sessionId"],
+                timestamp=data.get("timestamp", ""),
+                type=entry_type,
+                isSidechain=data.get("isSidechain", False),
+                agentId=data.get("agentId"),
+            )
+        # Unknown type with uuid -> keep for searchability
+        if data.get("uuid"):
             try:
                 return BaseEntry.model_validate(data)
             except Exception:
                 return None
-    # Unknown type with uuid → keep for searchability
-    if data.get("uuid"):
-        try:
-            return BaseEntry.model_validate(data)
-        except Exception:
-            return None
-    return None
+        return None
 
 
-def extract_text(content: "list[ContentItem] | None") -> str:
-    """Extract all text content from a message's content blocks."""
+def extract_text(content: "list[Any] | None") -> str:
+    """Extract all text content from a message's content blocks, including thinking and tool info."""
     if not content:
         return ""
     parts = []
@@ -74,7 +88,7 @@ def extract_text(content: "list[ContentItem] | None") -> str:
     return "\n".join(parts)
 
 
-def extract_tool_names(content: "list[ContentItem] | None") -> list[str]:
+def extract_tool_names(content: "list[Any] | None") -> list[str]:
     """Extract tool names from content blocks."""
     if not content:
         return []
@@ -96,31 +110,38 @@ def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> st
     return str(content)
 
 
-def get_entry_text(entry: TranscriptEntry) -> str:
+def get_entry_text(entry: BaseEntry) -> str:
     """Get searchable text from any entry type."""
-    if (
-        isinstance(
-            entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)
-        )
-        and entry.message
-    ):
+    # Message-based entries
+    if hasattr(entry, "message") and entry.message:
         return extract_text(entry.message.content)
-    if isinstance(entry, SystemEntry):
-        return entry.content or ""
-    if isinstance(entry, SummaryEntry):
+
+    # System entries
+    if hasattr(entry, "content") and entry.content:
+        return entry.content
+
+    # Summary entries
+    if hasattr(entry, "summary") and entry.summary:
         return entry.summary
-    if isinstance(entry, AiTitleEntry):
+
+    # AiTitle entries
+    if hasattr(entry, "aiTitle") and entry.aiTitle:
         return entry.aiTitle
+
     return ""
 
 
-def get_entry_tokens(entry: TranscriptEntry) -> tuple[int, int]:
+def get_entry_tokens(entry: BaseEntry) -> tuple[int, int]:
     """Get (input_tokens, output_tokens) from an entry."""
-    msg = None
-    if isinstance(
-        entry, (UserEntry, AssistantEntry, AttachmentEntry, QueueOperationEntry)
-    ):
-        msg = entry.message
-    if msg and msg.usage:
-        return (msg.usage.input_tokens or 0, msg.usage.output_tokens or 0)
+    if hasattr(entry, "message") and entry.message and entry.message.usage:
+        usage = entry.message.usage
+        return (usage.input_tokens or 0, usage.output_tokens or 0)
     return (0, 0)
+
+
+def parse_timestamp(ts: str | None) -> datetime | None:
+    """Parse ISO 8601 timestamp to datetime. Returns None for missing/invalid.
+
+    Returns naive UTC datetime for consistent comparison.
+    """
+    return lib_parse_timestamp(ts)

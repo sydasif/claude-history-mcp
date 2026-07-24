@@ -1,89 +1,30 @@
-"""Pydantic models for Claude Code JSONL transcript entries and content blocks."""
+"""MCP-specific models built on top of claude-code-log library types.
 
-from typing import Annotated, Any, Literal
+This module re-exports library types and adds MCP-specific response models.
+"""
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+from pydantic import BaseModel
 
-# ---------------------------------------------------------------------------
-# Content block types
-# ---------------------------------------------------------------------------
+from claude_code_log.api import TranscriptEntry
+from claude_code_log.models import (
+    UserTranscriptEntry as UserEntry,
+    AssistantTranscriptEntry as AssistantEntry,
+    SystemTranscriptEntry as SystemEntry,
+    SummaryTranscriptEntry as SummaryEntry,
+    AiTitleTranscriptEntry as AiTitleEntry,
+    AttachmentTranscriptEntry as AttachmentEntry,
+    QueueOperationTranscriptEntry as QueueOperationEntry,
+    BaseTranscriptEntry as BaseEntry,
+    TextContent,
+    ToolUseContent,
+    ToolResultContent,
+    ThinkingContent,
+    ImageContent,
+    UsageInfo,
+)
 
-
-class TextContent(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    type: Literal["text"] = "text"
-    text: str
-
-
-class ToolUseContent(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    type: Literal["tool_use"] = "tool_use"
-    id: str
-    name: str
-    input: dict[str, Any] = {}
-
-
-class ToolResultContent(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    type: Literal["tool_result"] = "tool_result"
-    tool_use_id: str
-    content: str | list[dict[str, Any]] = ""
-    is_error: bool | None = None
-
-
-class ThinkingContent(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    type: Literal["thinking"] = "thinking"
-    thinking: str
-    signature: str | None = None
-
-
-class ImageContent(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    type: Literal["image"] = "image"
-    source: dict[str, Any] = {}
-
-
-ContentItem = Annotated[
-    TextContent | ToolUseContent | ToolResultContent | ThinkingContent | ImageContent,
-    Field(discriminator="type"),
-]
-
-# ---------------------------------------------------------------------------
-# Usage / message
-# ---------------------------------------------------------------------------
-
-
-class UsageInfo(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    cache_creation_input_tokens: int | None = None
-    cache_read_input_tokens: int | None = None
-    server_tool_use: dict[str, Any] | None = None
-    service_tier: str | None = None
-
-
-class MessageModel(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    role: str
-    content: list[ContentItem] = []
-    model: str | None = None
-    usage: UsageInfo | None = None
-    id: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Entry types
-# ---------------------------------------------------------------------------
-
+# Re-export library types for backward compatibility
 SILENT_SKIP_TYPES = frozenset(
     {
         "file-history-snapshot",
@@ -97,91 +38,11 @@ SILENT_SKIP_TYPES = frozenset(
     }
 )
 
-
-class BaseEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    uuid: str | None = None
-    parentUuid: str | None = None
-    sessionId: str | None = None
-    session_id: str | None = None  # snake_case fallback seen in some entries
-    timestamp: str | None = None
-    type: str
-    isSidechain: bool = False
-    userType: str = ""
-    cwd: str | None = None
-    version: str | None = None
-    gitBranch: str | None = None
-    isMeta: bool | None = None
-    agentId: str | None = None
-    spawnedAgentId: str | None = None
-    teamName: str | None = None
-
-    @property
-    def resolved_session_id(self) -> str | None:
-        """sessionId takes precedence; falls back to session_id per spec 3.1."""
-        return self.sessionId or self.session_id
-
-
-class UserEntry(BaseEntry):
-    type: Literal["user"] = "user"
-    message: MessageModel | None = None
-    toolUseResult: str | list[Any] | dict[str, Any] | None = None
-    promptId: str | None = None
-
-
-class AssistantEntry(BaseEntry):
-    type: Literal["assistant"] = "assistant"
-    message: MessageModel | None = None
-    error: bool | None = None
-    isApiErrorMessage: bool | None = None
-
-
-class SystemEntry(BaseEntry):
-    type: Literal["system"] = "system"
-    content: str | None = None
-    subtype: str | None = None
-    level: str | None = None
-    durationMs: int | None = None
-    messageCount: int | None = None
-    hasOutput: bool | None = None
-    hookErrors: list[str] | None = None
-    hookInfos: list[dict[str, Any]] | None = None
-
-
-class SummaryEntry(BaseEntry):
-    type: Literal["summary"] = "summary"
-    summary: str
-    leafUuid: str | None = None
-
-
-class AiTitleEntry(BaseEntry):
-    type: Literal["ai-title"] = "ai-title"
-    aiTitle: str
-
-
-class AttachmentEntry(BaseEntry):
-    """Spec 2.3: attachment entries carry a message but no dedicated rendering."""
-
-    type: Literal["attachment"] = "attachment"
-    message: MessageModel | None = None
-
-
-class QueueOperationEntry(BaseEntry):
-    """Spec 2.3: queue-operation entries carry a message."""
-
-    type: Literal["queue-operation"] = "queue-operation"
-    message: MessageModel | None = None
-    operation: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# History command (history.jsonl)
-# ---------------------------------------------------------------------------
+# MCP Response Models (new - not in library)
 
 
 class HistoryCommand(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    """History command entry from history.jsonl."""
 
     display: str
     pastedContents: dict[str, Any] = {}
@@ -190,6 +51,82 @@ class HistoryCommand(BaseModel):
     sessionId: str
 
 
+class SessionSummary(BaseModel):
+    """Summary of a session for listing purposes."""
+
+    session_id: str
+    project: str
+    summary: str | None = None
+    ai_title: str | None = None
+    first_user_message: str | None = None
+    message_count: int = 0
+    first_timestamp: str | None = None
+    last_timestamp: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cwd: str | None = None
+
+
+class ProjectInfo(BaseModel):
+    """Project metadata."""
+
+    project_path: str
+    display_name: str
+    session_count: int
+    message_count: int
+    earliest_timestamp: str | None = None
+    latest_timestamp: str | None = None
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+
+
+class MessageResult(BaseModel):
+    """Single message in search results."""
+
+    session_id: str
+    project: str
+    timestamp: str | None = None
+    role: str
+    text_preview: str
+    tool_names: list[str] = []
+    model: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class SessionStats(BaseModel):
+    """Session statistics."""
+
+    session_id: str
+    duration_minutes: float | None = None
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    message_count: int = 0
+    tool_usage: dict[str, int] = {}
+    models_used: list[str] = []
+    error_count: int = 0
+
+
+class SessionTranscript(BaseModel):
+    """Full session transcript."""
+
+    session_id: str
+    project: str
+    summary: str | None = None
+    messages: list[dict[str, Any]] = []
+
+
+class RecentActivityEntry(BaseModel):
+    """Recent activity entry."""
+
+    session_id: str
+    project: str
+    timestamp: str
+    role: str
+    text_preview: str
+
+
+# Combined union for transcript entry (for backward compatibility)
 TranscriptEntry = (
     UserEntry
     | AssistantEntry
@@ -200,3 +137,32 @@ TranscriptEntry = (
     | QueueOperationEntry
     | BaseEntry
 )
+
+
+__all__ = [
+    # Library types (re-exported)
+    "TranscriptEntry",
+    "UserEntry",
+    "AssistantEntry",
+    "SystemEntry",
+    "SummaryEntry",
+    "AiTitleEntry",
+    "AttachmentEntry",
+    "QueueOperationEntry",
+    "BaseEntry",
+    "TextContent",
+    "ToolUseContent",
+    "ToolResultContent",
+    "ThinkingContent",
+    "ImageContent",
+    "UsageInfo",
+    "SILENT_SKIP_TYPES",
+    # MCP-specific models
+    "HistoryCommand",
+    "SessionSummary",
+    "ProjectInfo",
+    "MessageResult",
+    "SessionStats",
+    "SessionTranscript",
+    "RecentActivityEntry",
+]
