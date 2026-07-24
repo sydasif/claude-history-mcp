@@ -55,7 +55,6 @@ class SearchEngine:
                         continue
                     if to_dt and ts > to_dt:
                         continue
-                # Entries without timestamps always survive date filtering (spec 3.2)
                 filtered.append(s)
             sessions = filtered
 
@@ -114,10 +113,36 @@ class SearchEngine:
                         continue
                     if to_dt and ts > to_dt:
                         continue
-                filtered.append(r)
-            results = filtered
+                    filtered.append(r)
+                results = filtered
 
-        return results[:limit]
+        # Transform results to include role and text_preview
+        formatted_results = []
+        for r in results:
+            entry_type = r.get("entry_type")
+            if entry_type == "user":
+                role = "user"
+            elif entry_type == "assistant":
+                role = "assistant"
+            elif entry_type == "system":
+                role = "system"
+            else:
+                role = entry_type or "unknown"
+
+            text = r.get("content_text", "")
+            formatted_results.append({
+                "session_id": r.get("session_id"),
+                "project": r.get("project_path"),
+                "timestamp": r.get("timestamp"),
+                "role": role,
+                "text_preview": text[:200] if text else "",
+                "tool_names": json.loads(r.get("tool_names", "[]")) if r.get("tool_names") else [],
+                "model": r.get("model"),
+                "tokens_input": r.get("tokens_input", 0),
+                "tokens_output": r.get("tokens_output", 0),
+            })
+
+        return formatted_results[:limit]
 
     def get_session(self, session_id: str) -> dict | None:
         """Get full session with messages."""
@@ -139,9 +164,31 @@ class SearchEngine:
             return None
 
         messages = self.cache.get_session_messages(session_id)
+        # Transform messages to include role and text fields
+        formatted_messages = []
+        for msg in messages:
+            role = msg.get("entry_type")
+            if role == "user":
+                role = "user"
+            elif role == "assistant":
+                role = "assistant"
+            elif role == "system":
+                role = "system"
+            else:
+                role = role or "unknown"
+
+            text = msg.get("content_text", "")
+            formatted_messages.append({
+                "timestamp": msg.get("timestamp"),
+                "role": role,
+                "text": text,
+                "tool_names": json.loads(msg.get("tool_names", "[]")) if msg.get("tool_names") else [],
+                "model": msg.get("model"),
+                "is_error": bool(msg.get("is_error")),
+            })
         return {
             "session": session,
-            "messages": messages,
+            "messages": formatted_messages,
         }
 
     def get_session_stats(self, session_id: str) -> dict | None:
@@ -178,7 +225,6 @@ class SearchEngine:
 
         return {
             "session_id": session_id,
-            "project": session.get("display_name"),
             "duration_minutes": duration_minutes,
             "total_input_tokens": session.get("total_input_tokens", 0),
             "total_output_tokens": session.get("total_output_tokens", 0),
@@ -196,7 +242,7 @@ class SearchEngine:
         to_date: str | None = None,
         limit: int = 50,
     ) -> list[dict]:
-        """Search command history."""
+        """Search the global command history."""
         results = self.cache.search_history(
             query=query, project=project, limit=limit * 2
         )

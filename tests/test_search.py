@@ -71,7 +71,7 @@ def test_search_messages_role_filter(tmp_path):
     )
     result = engine.search_messages("hi", role="user")
     assert len(result) == 1
-    assert result[0]["entry_type"] == "user"
+    assert result[0]["role"] == "user"
 
 
 def test_search_messages_tool_name_filter(tmp_path):
