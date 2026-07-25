@@ -574,6 +574,7 @@ def list_sessions(
     from_date: str | None = None,   # natural language: "yesterday", "last week"
     to_date: str | None = None,
     limit: int = 50,
+    offset: int = 0,                # pagination: skip N results
 ) -> list[dict]:
     """List Claude Code sessions with summaries, timestamps, and token usage."""
     # Returns: [{session_id, project, summary, ai_title, first_user_message,
@@ -596,6 +597,7 @@ def search_messages(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
+    offset: int = 0,                # pagination: skip N results
 ) -> list[dict]:
     """Search messages across all Claude Code sessions."""
     # Returns: [{session_id, project, timestamp, role, text_preview,
@@ -625,7 +627,8 @@ Token usage and tool statistics for a session.
 ```python
 @mcp.tool
 def get_session_stats(session_id: str) -> dict:
-    """Get token usage, tool call counts, and duration for a session."""
+    """Get token usage, tool call counts, and duration for a session.
+    Supports prefix matching (min 8 chars), same as get_session."""
     # Returns: {session_id, duration_minutes, total_input_tokens,
     #           total_output_tokens, message_count, tool_usage: {Bash: 10, Read: 5, ...},
     #           models_used: ["claude-sonnet-5-20250514"],
@@ -644,6 +647,7 @@ def search_history(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
+    offset: int = 0,                # pagination: skip N results
 ) -> list[dict]:
     """Search Claude Code command history."""
     # Returns: [{display, project, session_id, timestamp}]
@@ -657,6 +661,8 @@ Get recent activity across all projects.
 @mcp.tool
 def get_recent_activity(
     hours: int = 24,
+    limit: int = 100,
+    offset: int = 0,                # pagination: skip N results
 ) -> list[dict]:
     """Get recent Claude Code activity across all projects."""
     # Returns: [{session_id, project, timestamp, role, text_preview}]
@@ -877,3 +883,14 @@ Installed via: `claude-code-log @ git+https://github.com/sydasif/claude-code-log
 ---
 
 ## 17. What We Skip (vs claude-code-log)
+
+### 7.4 Cache Pagination
+
+All cache query methods support pagination:
+
+```python
+# Messages can be fetched with limit/offset
+cache.get_session_messages(session_id, limit=50, offset=0)
+```
+
+The `SearchEngine` layers offset-based pagination on top for all list/search tools with overfetch-then-filter approach — it fetches more rows than needed from SQLite, applies in-memory post-filters (tool name, date range), then slices `[offset:offset+limit]` before returning.

@@ -114,6 +114,7 @@ def test_load_jsonl_file_computes_token_totals(tmp_path):
     _write_jsonl(f, _sample_lines())
     load_jsonl_file(f, cache, pid)
     session = cache.get_session("sess1")
+    assert session is not None
     assert session["total_input_tokens"] == 10
     assert session["total_output_tokens"] == 20
 
@@ -174,6 +175,7 @@ def test_load_project_rolls_up_project_stats(tmp_path):
 
     load_project(proj_dir, cache)
     project = cache.get_project(str(proj_dir))
+    assert project is not None
     assert project["total_messages"] == 2
     assert project["total_input_tokens"] == 10
 

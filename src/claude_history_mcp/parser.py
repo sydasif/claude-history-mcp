@@ -32,7 +32,7 @@ from .models import (
 )
 
 
-def create_entry(data: dict[str, Any]) -> BaseEntry | None:
+def create_entry(data: dict[str, Any]) -> Any | None:
     """Parse raw JSON dict into typed model. Returns None for skip types."""
     entry_type = data.get("type", "")
     if entry_type in SILENT_SKIP_TYPES:
@@ -123,7 +123,7 @@ def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> st
     return str(content)
 
 
-def get_entry_text(entry: BaseEntry) -> str:
+def get_entry_text(entry: Any) -> str:
     """Get searchable text from any entry type.
 
     Args:
@@ -133,25 +133,29 @@ def get_entry_text(entry: BaseEntry) -> str:
         Extracted text content for search indexing.
     """
     # Message-based entries
-    if hasattr(entry, "message") and entry.message:
-        return extract_text(entry.message.content)
+    msg = getattr(entry, "message", None)
+    if msg and hasattr(msg, "content") and msg.content:
+        return extract_text(msg.content)
 
     # System entries
-    if hasattr(entry, "content") and entry.content:
-        return entry.content
+    content = getattr(entry, "content", None)
+    if content and isinstance(content, str):
+        return content
 
     # Summary entries
-    if hasattr(entry, "summary") and entry.summary:
-        return entry.summary
+    summary = getattr(entry, "summary", None)
+    if summary and isinstance(summary, str):
+        return summary
 
     # AiTitle entries
-    if hasattr(entry, "aiTitle") and entry.aiTitle:
-        return entry.aiTitle
+    ai_title = getattr(entry, "aiTitle", None)
+    if ai_title and isinstance(ai_title, str):
+        return ai_title
 
     return ""
 
 
-def get_entry_tokens(entry: BaseEntry) -> tuple[int, int]:
+def get_entry_tokens(entry: Any) -> tuple[int, int]:
     """Get (input_tokens, output_tokens) from an entry.
 
     Args:
@@ -160,9 +164,10 @@ def get_entry_tokens(entry: BaseEntry) -> tuple[int, int]:
     Returns:
         Tuple of (input_tokens, output_tokens). Returns (0, 0) if no usage info.
     """
-    if hasattr(entry, "message") and entry.message and entry.message.usage:
-        usage = entry.message.usage
-        return (usage.input_tokens or 0, usage.output_tokens or 0)
+    msg = getattr(entry, "message", None)
+    usage = getattr(msg, "usage", None) if msg else None
+    if usage:
+        return (getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
     return (0, 0)
 
 
@@ -175,4 +180,6 @@ def parse_timestamp(ts: str | None) -> datetime | None:
     Returns:
         Naive UTC datetime for consistent comparison, or None if missing/invalid.
     """
+    if ts is None:
+        return None
     return lib_parse_timestamp(ts)

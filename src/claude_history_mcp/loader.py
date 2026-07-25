@@ -102,12 +102,13 @@ def load_jsonl_file(
                 cwd = getattr(entry, "cwd", None) or None
 
             # Extract summary
-            if entry.type == "summary" and hasattr(entry, "summary"):
-                summary = entry.summary
+            if entry.type == "summary":
+                summary = getattr(entry, "summary", None)
 
             # Extract first user message
-            if entry.type == "user" and entry.message and not first_user_message:
-                text = extract_text(entry.message.content)
+            msg = getattr(entry, "message", None)
+            if entry.type == "user" and msg and not first_user_message:
+                text = extract_text(getattr(msg, "content", None))
                 if text and not text.startswith("<"):
                     first_user_message = text[:500]
 
@@ -122,12 +123,12 @@ def load_jsonl_file(
 
             # Build searchable record
             text = get_entry_text(entry)
-            tools = extract_tool_names(entry.message.content) if hasattr(entry, "message") and entry.message else []
+            tools = extract_tool_names(getattr(msg, "content", None)) if msg else []
             model = None
             is_error = 0
             if entry.type == "assistant":
-                if entry.message and entry.message.model:
-                    model = entry.message.model
+                if msg and getattr(msg, "model", None):
+                    model = msg.model
                 # Library uses requestId instead of error field
                 if getattr(entry, "requestId", None):
                     is_error = 1
@@ -155,7 +156,11 @@ def load_jsonl_file(
                 }
             )
 
-    # Store in our cache
+            if len(parsed_entries) >= 500:
+                cache.insert_messages(project_id, session_id, file_path.name, parsed_entries)
+                parsed_entries.clear()
+
+    # Store remaining in our cache
     if parsed_entries:
         cache.insert_messages(project_id, session_id, file_path.name, parsed_entries)
 

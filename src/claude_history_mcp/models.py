@@ -15,6 +15,7 @@ from claude_code_log.models import (
     AttachmentTranscriptEntry as AttachmentEntry,
     QueueOperationTranscriptEntry as QueueOperationEntry,
     BaseTranscriptEntry as BaseEntry,
+    TranscriptEntry,
     TextContent,
     ToolUseContent,
     ToolResultContent,
@@ -126,16 +127,7 @@ class RecentActivityEntry(BaseModel):
 
 
 # Combined union for transcript entry (for backward compatibility)
-TranscriptEntry = (
-    UserEntry
-    | AssistantEntry
-    | SystemEntry
-    | SummaryEntry
-    | AiTitleEntry
-    | AttachmentEntry
-    | QueueOperationEntry
-    | BaseEntry
-)
+# TranscriptEntry is already imported from claude_code_log.models
 
 
 __all__ = [

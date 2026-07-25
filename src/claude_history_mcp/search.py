@@ -33,9 +33,12 @@ class SearchEngine:
         from_date: str | None = None,
         to_date: str | None = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[dict]:
-        """List sessions with optional filters."""
-        sessions = self.cache.get_sessions(limit=limit * 2)  # overfetch for filtering
+        """List sessions with optional filters and pagination."""
+        sessions = self.cache.get_sessions(
+            limit=max(100, limit * 3)
+        )  # overfetch for filtering
 
         if project:
             sessions = [
@@ -65,7 +68,7 @@ class SearchEngine:
                 filtered.append(s)
             sessions = filtered
 
-        return sessions[:limit]
+        return sessions[offset : offset + limit]
 
     def search_messages(
         self,
@@ -77,8 +80,9 @@ class SearchEngine:
         from_date: str | None = None,
         to_date: str | None = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[dict]:
-        """Search messages with multiple filters."""
+        """Search messages with multiple filters and pagination."""
         project_id = None
         if project:
             projects = self.cache.get_all_projects()
@@ -95,7 +99,7 @@ class SearchEngine:
             project_id=project_id,
             session_id=session_id,
             role=role,
-            limit=limit * 3,
+            limit=max(100, (offset + limit) * 3),
         )
 
         # Post-filter by tool_name and date (SQLite LIKE can't filter JSON tool_names)
@@ -126,21 +130,25 @@ class SearchEngine:
         # Transform results to include role and text_preview
         formatted_results = []
         for r in results:
-            role = _entry_type_to_role(r.get("entry_type"))
+            role_str = _entry_type_to_role(r.get("entry_type"))
             text = r.get("content_text", "")
-            formatted_results.append({
-                "session_id": r.get("session_id"),
-                "project": r.get("project_path"),
-                "timestamp": r.get("timestamp"),
-                "role": role,
-                "text_preview": text[:200] if text else "",
-                "tool_names": json.loads(r.get("tool_names", "[]")) if r.get("tool_names") else [],
-                "model": r.get("model"),
-                "tokens_input": r.get("tokens_input", 0),
-                "tokens_output": r.get("tokens_output", 0),
-            })
+            formatted_results.append(
+                {
+                    "session_id": r.get("session_id"),
+                    "project": r.get("project_path"),
+                    "timestamp": r.get("timestamp"),
+                    "role": role_str,
+                    "text_preview": text[:200] if text else "",
+                    "tool_names": json.loads(r.get("tool_names", "[]"))
+                    if r.get("tool_names")
+                    else [],
+                    "model": r.get("model"),
+                    "tokens_input": r.get("tokens_input", 0),
+                    "tokens_output": r.get("tokens_output", 0),
+                }
+            )
 
-        return formatted_results[:limit]
+        return formatted_results[offset : offset + limit]
 
     def get_session(self, session_id: str) -> dict | None:
         """Get full session with messages."""
@@ -167,14 +175,18 @@ class SearchEngine:
         for msg in messages:
             role = _entry_type_to_role(msg.get("entry_type"))
             text = msg.get("content_text", "")
-            formatted_messages.append({
-                "timestamp": msg.get("timestamp"),
-                "role": role,
-                "text": text,
-                "tool_names": json.loads(msg.get("tool_names", "[]")) if msg.get("tool_names") else [],
-                "model": msg.get("model"),
-                "is_error": bool(msg.get("is_error")),
-            })
+            formatted_messages.append(
+                {
+                    "timestamp": msg.get("timestamp"),
+                    "role": role,
+                    "text": text,
+                    "tool_names": json.loads(msg.get("tool_names", "[]"))
+                    if msg.get("tool_names")
+                    else [],
+                    "model": msg.get("model"),
+                    "is_error": bool(msg.get("is_error")),
+                }
+            )
         return {
             "session": session,
             "messages": formatted_messages,
@@ -183,6 +195,18 @@ class SearchEngine:
     def get_session_stats(self, session_id: str) -> dict | None:
         """Get token usage and tool statistics for a session."""
         session = self.cache.get_session(session_id)
+        if not session:
+            # Try prefix match
+            sessions = self.cache.get_sessions(limit=1000)
+            matches = [s for s in sessions if s["session_id"].startswith(session_id)]
+            if len(matches) == 1:
+                session = matches[0]
+                session_id = matches[0]["session_id"]
+            elif len(matches) > 1:
+                return {
+                    "error": "ambiguous_prefix",
+                    "candidates": [m["session_id"] for m in matches[:10]],
+                }
         if not session:
             return None
 
@@ -215,9 +239,9 @@ class SearchEngine:
         return {
             "session_id": session_id,
             "duration_minutes": duration_minutes,
-            "total_input_tokens": session.get("total_input_tokens", 0),
-            "total_output_tokens": session.get("total_output_tokens", 0),
-            "message_count": session.get("message_count", 0),
+            "total_input_tokens": session.get("total_input_tokens") or 0,
+            "total_output_tokens": session.get("total_output_tokens") or 0,
+            "message_count": session.get("message_count") or 0,
             "tool_usage": dict(sorted(tool_counts.items(), key=lambda x: -x[1])),
             "models_used": sorted(models_used),
             "error_count": error_count,
@@ -230,10 +254,11 @@ class SearchEngine:
         from_date: str | None = None,
         to_date: str | None = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[dict]:
-        """Search the global command history."""
+        """Search the global command history with pagination."""
         results = self.cache.search_history(
-            query=query, project=project, limit=limit * 2
+            query=query, project=project, limit=max(100, (offset + limit) * 2)
         )
 
         if from_date or to_date:
@@ -255,10 +280,12 @@ class SearchEngine:
                 filtered.append(r)
             results = filtered
 
-        return results[:limit]
+        return results[offset : offset + limit]
 
-    def get_recent_activity(self, hours: int = 24, limit: int = 100) -> list[dict]:
-        """Get recent messages across all projects. Timestamp-less entries always survive date filtering (spec 3.2)."""
+    def get_recent_activity(
+        self, hours: int = 24, limit: int = 100, offset: int = 0
+    ) -> list[dict]:
+        """Get recent messages across all projects with pagination."""
         cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=hours)
         cutoff_str = cutoff.isoformat()
 
@@ -268,7 +295,7 @@ class SearchEngine:
             "JOIN projects p ON m.project_id=p.id "
             "WHERE (m.timestamp >= ? OR m.timestamp IS NULL) AND m.entry_type IN ('user', 'assistant') "
             "ORDER BY (m.timestamp IS NULL) ASC, m.timestamp DESC LIMIT ?",
-            (cutoff_str, limit),
+            (cutoff_str, offset + limit),
         ).fetchall()
 
         # Transform to include role and text_preview
@@ -276,18 +303,20 @@ class SearchEngine:
         for r in rows:
             role = _entry_type_to_role(r["entry_type"])
             text = r["content_text"] or ""
-            formatted.append({
-                "session_id": r["session_id"],
-                "project": r["project_path"],
-                "timestamp": r["timestamp"],
-                "role": role,
-                "text_preview": text[:200] if text else "",
-                "tool_names": json.loads(r["tool_names"] or "[]"),
-                "model": r["model"],
-                "tokens_input": r["tokens_input"] or 0,
-                "tokens_output": r["tokens_output"] or 0,
-            })
-        return formatted[:limit]
+            formatted.append(
+                {
+                    "session_id": r["session_id"],
+                    "project": r["project_path"],
+                    "timestamp": r["timestamp"],
+                    "role": role,
+                    "text_preview": text[:200] if text else "",
+                    "tool_names": json.loads(r["tool_names"] or "[]"),
+                    "model": r["model"],
+                    "tokens_input": r["tokens_input"] or 0,
+                    "tokens_output": r["tokens_output"] or 0,
+                }
+            )
+        return formatted[offset : offset + limit]
 
     def _parse_natural_date(
         self, date_str: str, start_of_day: bool = False, end_of_day: bool = False

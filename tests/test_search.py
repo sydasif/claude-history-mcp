@@ -135,6 +135,7 @@ def test_get_session_stats_token_counts(tmp_path):
     pid = engine.cache.upsert_project("/a", "a")
     engine.cache.upsert_session(pid, "s1", total_input_tokens=100, total_output_tokens=50, message_count=2)
     stats = engine.get_session_stats("s1")
+    assert stats is not None
     assert stats["total_input_tokens"] == 100
     assert stats["total_output_tokens"] == 50
 
@@ -159,6 +160,7 @@ def test_get_session_stats_tool_usage(tmp_path):
         ],
     )
     stats = engine.get_session_stats("s1")
+    assert stats is not None
     assert stats["tool_usage"]["Bash"] == 2
     assert stats["tool_usage"]["Read"] == 1
 

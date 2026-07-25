@@ -50,6 +50,7 @@ def list_sessions(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """List Claude Code sessions with summaries, timestamps, and token usage.
 
@@ -58,11 +59,12 @@ def list_sessions(
         from_date: Filter sessions after this date (natural language: "yesterday", "last week")
         to_date: Filter sessions before this date
         limit: Maximum sessions to return (default 50)
+        offset: Number of sessions to skip for pagination (default 0)
     """
     try:
         engine = _get_engine()
         return engine.list_sessions(
-            project=project, from_date=from_date, to_date=to_date, limit=limit
+            project=project, from_date=from_date, to_date=to_date, limit=limit, offset=offset
         )
     except Exception as e:
         return [{"error": str(e)}]
@@ -78,6 +80,7 @@ def search_messages(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Search messages across all Claude Code sessions.
 
@@ -93,6 +96,7 @@ def search_messages(
         from_date: Filter messages after this date
         to_date: Filter messages before this date
         limit: Maximum results (default 50)
+        offset: Number of results to skip for pagination (default 0)
     """
     try:
         engine = _get_engine()
@@ -105,6 +109,7 @@ def search_messages(
             from_date=from_date,
             to_date=to_date,
             limit=limit,
+            offset=offset,
         )
     except Exception as e:
         return [{"error": str(e)}]
@@ -181,6 +186,7 @@ def search_history(
     from_date: str | None = None,
     to_date: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Search Claude Code command history (what you typed).
 
@@ -193,6 +199,7 @@ def search_history(
         from_date: Filter after this date
         to_date: Filter before this date
         limit: Maximum results (default 50)
+        offset: Number of results to skip for pagination (default 0)
     """
     try:
         engine = _get_engine()
@@ -202,13 +209,14 @@ def search_history(
             from_date=from_date,
             to_date=to_date,
             limit=limit,
+            offset=offset,
         )
     except Exception as e:
         return [{"error": str(e)}]
 
 
 @mcp.tool
-def get_recent_activity(hours: int = 24, limit: int = 100) -> list[dict[str, Any]]:
+def get_recent_activity(hours: int = 24, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
     """Get recent Claude Code activity across all projects.
 
     Shows the most recent messages (user prompts and assistant responses)
@@ -217,10 +225,11 @@ def get_recent_activity(hours: int = 24, limit: int = 100) -> list[dict[str, Any
     Args:
         hours: Look back this many hours (default 24)
         limit: Maximum results to return (default 100)
+        offset: Number of results to skip for pagination (default 0)
     """
     try:
         engine = _get_engine()
-        return engine.get_recent_activity(hours=hours, limit=limit)
+        return engine.get_recent_activity(hours=hours, limit=limit, offset=offset)
     except Exception as e:
         return [{"error": str(e)}]
 

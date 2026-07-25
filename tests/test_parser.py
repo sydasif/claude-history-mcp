@@ -1,5 +1,6 @@
 """Tests for parser using claude-code-log library models."""
 
+from typing import Any, cast
 from claude_code_log.api import create_transcript_entry
 from claude_code_log.models import (
     UserTranscriptEntry as UserEntry,
@@ -207,11 +208,11 @@ def test_get_entry_tokens():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={
+        message=cast(Any, {
             "role": "user",
             "content": [],
             "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
+        })
     )
     assert get_entry_tokens(entry) == (10, 5)
 
@@ -227,7 +228,7 @@ def test_get_entry_tokens_no_usage():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={"role": "user", "content": []}
+        message=cast(Any, {"role": "user", "content": []})
     )
     assert get_entry_tokens(entry) == (0, 0)
 

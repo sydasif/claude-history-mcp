@@ -8,7 +8,7 @@ import threading
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Any
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -363,15 +363,19 @@ class CacheManager:
         params.append(limit)
         return [dict(r) for r in self.connect().execute(sql, params).fetchall()]
 
-    def get_session_messages(self, session_id: str) -> list[dict]:
-        """Get all messages for a session in order."""
+    def get_session_messages(
+        self, session_id: str, limit: int | None = None, offset: int = 0
+    ) -> list[dict]:
+        """Get messages for a session in order, with optional pagination."""
+        sql = "SELECT * FROM messages WHERE session_id=? ORDER BY id ASC"
+        params: list[Any] = [session_id]
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
         return [
             dict(r)
             for r in self.connect()
-            .execute(
-                "SELECT * FROM messages WHERE session_id=? ORDER BY id ASC",
-                (session_id,),
-            )
+            .execute(sql, params)
             .fetchall()
         ]
 

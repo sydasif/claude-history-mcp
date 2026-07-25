@@ -1,5 +1,6 @@
 """Tests for models using claude-code-log library models."""
 
+from typing import Any, cast
 from claude_code_log.models import (
     UserTranscriptEntry as UserEntry,
     AssistantTranscriptEntry as AssistantEntry,
@@ -62,14 +63,14 @@ def test_user_entry_mixed_content():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={
+        message=cast(Any, {
             "role": "user",
             "content": [
                 {"type": "text", "text": "hello"},
                 {"type": "tool_result", "tool_use_id": "t1", "content": "done"},
             ],
             "usage": None,
-        },
+        }),
     )
     assert len(entry.message.content) == 2
 
@@ -85,7 +86,7 @@ def test_assistant_entry_thinking_text_tool_use():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={
+        message=cast(Any, {
             "id": "msg-1",
             "type": "message",
             "role": "assistant",
@@ -96,7 +97,7 @@ def test_assistant_entry_thinking_text_tool_use():
             ],
             "model": "claude-3",
             "usage": None,
-        },
+        }),
     )
     assert len(entry.message.content) == 3
 
@@ -145,15 +146,16 @@ def test_content_item_discriminated_union():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={
+        message=cast(Any, {
             "role": "user",
             "content": [
                 {"type": "text", "text": "t"},
                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "..."}},
             ],
             "usage": None,
-        },
+        }),
     )
+    assert len(entry.message.content) == 2
     types = {type(c).__name__ for c in entry.message.content}
     assert types == {"TextContent", "ImageContent"}
 
@@ -183,7 +185,7 @@ def test_user_entry_missing_message_no_crash():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={"role": "user", "content": [], "usage": None},
+        message=cast(Any, {"role": "user", "content": [], "usage": None}),
     )
     # Just verify it doesn't crash
     assert entry is not None
@@ -201,7 +203,7 @@ def test_assistant_entry_error_true():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message={"id": "msg-1", "type": "message", "role": "assistant", "content": [], "model": "claude-3", "usage": None},
+        message=cast(Any, {"id": "msg-1", "type": "message", "role": "assistant", "content": [], "model": "claude-3", "usage": None}),
         requestId="req-1",
     )
     assert entry.requestId == "req-1"

@@ -22,7 +22,9 @@ def test_upsert_project_updates_display_name(tmp_path):
     pid1 = cache.upsert_project("/home/zulu/proj", "old-name")
     pid2 = cache.upsert_project("/home/zulu/proj", "new-name")
     assert pid1 == pid2
-    assert cache.get_project("/home/zulu/proj")["display_name"] == "new-name"
+    proj = cache.get_project("/home/zulu/proj")
+    assert proj is not None
+    assert proj["display_name"] == "new-name"
 
 
 def test_get_project_none_for_missing(tmp_path):
@@ -334,6 +336,7 @@ def test_recompute_project_stats_rolls_up_from_sessions(tmp_path):
     )
     cache.recompute_project_stats(pid)
     project = cache.get_project("/a")
+    assert project is not None
     assert project["total_messages"] == 8
     assert project["total_input_tokens"] == 130
     assert project["total_output_tokens"] == 70

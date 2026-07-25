@@ -19,6 +19,7 @@ def test_scrub_surrogates_none():
 def test_scrub_surrogates_high_surrogate():
     s = "before\ud800after"
     result = scrub_surrogates(s)
+    assert result is not None
     assert "\ud800" not in result
     assert "\ufffd" in result
 
