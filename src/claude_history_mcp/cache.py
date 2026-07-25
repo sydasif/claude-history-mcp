@@ -3,6 +3,7 @@
 Provides thread-safe CRUD operations with WAL mode and connection pooling.
 """
 
+import json
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -372,12 +373,7 @@ class CacheManager:
         if limit is not None:
             sql += " LIMIT ? OFFSET ?"
             params.extend([limit, offset])
-        return [
-            dict(r)
-            for r in self.connect()
-            .execute(sql, params)
-            .fetchall()
-        ]
+        return [dict(r) for r in self.connect().execute(sql, params).fetchall()]
 
     # --- History CRUD ---
     def insert_history_commands(self, commands: list[dict]) -> int:
@@ -476,3 +472,79 @@ class CacheManager:
                 "SELECT COUNT(*) FROM history_commands"
             ).fetchone()[0],
         }
+
+    # --- Analytics & Aggregations ---
+    def get_usage_trends(
+        self, project_id: int | None = None, limit_days: int = 30
+    ) -> list[dict]:
+        """Get daily usage trends (messages, tokens) grouped by date."""
+        conn = self.connect()
+        sql = (
+            "SELECT date(timestamp) as day, "
+            "COUNT(*) as message_count, "
+            "COALESCE(SUM(tokens_input), 0) as input_tokens, "
+            "COALESCE(SUM(tokens_output), 0) as output_tokens "
+            "FROM messages WHERE timestamp IS NOT NULL"
+        )
+        params: list[Any] = []
+        if project_id:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        sql += " GROUP BY day ORDER BY day DESC LIMIT ?"
+        params.append(limit_days)
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_model_usage(self, project_id: int | None = None) -> list[dict]:
+        """Get usage breakdown grouped by model."""
+        conn = self.connect()
+        sql = (
+            "SELECT COALESCE(model, 'unknown') as model, "
+            "COUNT(*) as message_count, "
+            "COALESCE(SUM(tokens_input), 0) as input_tokens, "
+            "COALESCE(SUM(tokens_output), 0) as output_tokens "
+            "FROM messages WHERE model IS NOT NULL AND model != ''"
+        )
+        params: list[Any] = []
+        if project_id:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        sql += " GROUP BY model ORDER BY message_count DESC"
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_tool_usage(self, project_id: int | None = None) -> list[dict]:
+        """Get tool usage frequency across messages."""
+        conn = self.connect()
+        sql = "SELECT tool_names FROM messages WHERE tool_names IS NOT NULL AND tool_names != '[]'"
+        params: list[Any] = []
+        if project_id:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        rows = conn.execute(sql, params).fetchall()
+
+        counts: dict[str, int] = {}
+        for r in rows:
+            try:
+                tools = json.loads(r["tool_names"])
+                for t in tools:
+                    counts[t] = counts.get(t, 0) + 1
+            except Exception:
+                pass
+        return [
+            {"tool_name": k, "count": v}
+            for k, v in sorted(counts.items(), key=lambda x: -x[1])
+        ]
+
+    def get_cost_data(
+        self, project_id: int | None = None, session_id: str | None = None
+    ) -> list[dict]:
+        """Get raw token and model data for cost calculation."""
+        conn = self.connect()
+        sql = "SELECT model, tokens_input, tokens_output, session_id FROM messages WHERE (tokens_input > 0 OR tokens_output > 0)"
+        params: list[Any] = []
+        if project_id:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        if session_id:
+            sql += " AND session_id=?"
+            params.append(session_id)
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]

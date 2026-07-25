@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import dateparser
 
 from .cache import CacheManager
-from .utils import parse_timestamp
+from .utils import calculate_cost, parse_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -317,6 +317,84 @@ class SearchEngine:
                 }
             )
         return formatted[offset : offset + limit]
+
+    def _resolve_project_id(self, project: str | None) -> int | None:
+        if not project:
+            return None
+        projects = self.cache.get_all_projects()
+        for p in projects:
+            if (
+                project.lower()
+                in (p.get("project_path", "") + p.get("display_name", "")).lower()
+            ):
+                return int(p["id"])
+        return None
+
+    def get_cost_estimate(
+        self, project: str | None = None, session_id: str | None = None
+    ) -> dict:
+        """Calculate total estimated cost in USD based on model and token counts."""
+        project_id = self._resolve_project_id(project) if project else None
+        rows = self.cache.get_cost_data(project_id=project_id, session_id=session_id)
+
+        total_cost = 0.0
+        total_input = 0
+        total_output = 0
+        model_costs: dict[str, float] = {}
+
+        for r in rows:
+            model = r.get("model") or "unknown"
+            inp = r.get("tokens_input") or 0
+            out = r.get("tokens_output") or 0
+            total_input += inp
+            total_output += out
+            cost = calculate_cost(model, inp, out)
+            total_cost += cost
+            model_costs[model] = model_costs.get(model, 0.0) + cost
+
+        return {
+            "total_cost_usd": round(total_cost, 4),
+            "total_input_tokens": total_input,
+            "total_output_tokens": total_output,
+            "cost_by_model": {
+                k: round(v, 4)
+                for k, v in sorted(model_costs.items(), key=lambda x: -x[1])
+            },
+        }
+
+    def get_usage_trends(
+        self, project: str | None = None, days: int = 30
+    ) -> list[dict]:
+        """Get daily usage trends (messages, tokens)."""
+        project_id = self._resolve_project_id(project) if project else None
+        return self.cache.get_usage_trends(project_id=project_id, limit_days=days)
+
+    def get_model_usage(self, project: str | None = None) -> list[dict]:
+        """Get model breakdown with cost estimates."""
+        project_id = self._resolve_project_id(project) if project else None
+        rows = self.cache.get_model_usage(project_id=project_id)
+
+        result = []
+        for r in rows:
+            model = r["model"]
+            inp = r["input_tokens"]
+            out = r["output_tokens"]
+            cost = calculate_cost(model, inp, out)
+            result.append(
+                {
+                    "model": model,
+                    "message_count": r["message_count"],
+                    "input_tokens": inp,
+                    "output_tokens": out,
+                    "estimated_cost_usd": round(cost, 4),
+                }
+            )
+        return result
+
+    def get_tool_usage(self, project: str | None = None) -> list[dict]:
+        """Get tool frequency ranking."""
+        project_id = self._resolve_project_id(project) if project else None
+        return self.cache.get_tool_usage(project_id=project_id)
 
     def _parse_natural_date(
         self, date_str: str, start_of_day: bool = False, end_of_day: bool = False

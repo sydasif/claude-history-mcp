@@ -69,3 +69,31 @@ def get_history_file() -> Path | None:
     """
     path = get_claude_dir() / "history.jsonl"
     return path if path.exists() else None
+
+
+# Model pricing per 1M tokens (input, output) in USD
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "claude-opus-4": (15.0, 75.0),
+    "claude-sonnet-5": (3.0, 15.0),
+    "claude-sonnet-4": (3.0, 15.0),
+    "claude-haiku-4": (0.25, 1.25),
+    "claude-haiku-4.5": (0.25, 1.25),
+}
+
+DEFAULT_PRICING = (3.0, 15.0)  # Default to Sonnet pricing
+
+
+def calculate_cost(model: str | None, input_tokens: int, output_tokens: int) -> float:
+    """Calculate cost in USD for given model and token counts."""
+    if not model:
+        pricing = DEFAULT_PRICING
+    else:
+        # Match prefix or exact
+        pricing = DEFAULT_PRICING
+        for k, v in MODEL_PRICING.items():
+            if k in model.lower():
+                pricing = v
+                break
+    input_cost = (input_tokens / 1_000_000) * pricing[0]
+    output_cost = (output_tokens / 1_000_000) * pricing[1]
+    return round(input_cost + output_cost, 6)

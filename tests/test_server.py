@@ -38,7 +38,11 @@ def isolated_home(tmp_path, monkeypatch):
                     "cwd": "/tmp/demo",
                     "version": "1.0",
                     "timestamp": "2026-07-23T10:00:00Z",
-                    "message": {"role": "user", "content": [{"type": "text", "text": "hello there"}], "usage": None},
+                    "message": {
+                        "role": "user",
+                        "content": [{"type": "text", "text": "hello there"}],
+                        "usage": None,
+                    },
                 },
                 {
                     "type": "assistant",
@@ -97,7 +101,9 @@ async def test_search_messages():
     from claude_history_mcp.server import mcp
 
     async with Client(mcp) as client:
-        result = await client.call_tool("search_messages", {"query": "hello", "limit": 5})
+        result = await client.call_tool(
+            "search_messages", {"query": "hello", "limit": 5}
+        )
         assert len(result.data) == 1
 
 
@@ -121,7 +127,9 @@ async def test_search_history_empty_is_fine():
     from claude_history_mcp.server import mcp
 
     async with Client(mcp) as client:
-        result = await client.call_tool("search_history", {"query": "model", "limit": 5})
+        result = await client.call_tool(
+            "search_history", {"query": "model", "limit": 5}
+        )
         assert isinstance(result.data, list)
 
 
@@ -163,3 +171,33 @@ async def test_server_has_expected_resources():
         resource_uris = [str(r.uri) for r in resources]
         assert "claude://projects" in resource_uris
         assert "claude://history" in resource_uris
+
+
+@pytest.mark.asyncio
+async def test_new_analytics_tools():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        # Verify tools exist in list_tools
+        tools = await client.list_tools()
+        tool_names = [t.name for t in tools]
+        for expected in [
+            "get_cost_estimate",
+            "get_usage_trends",
+            "get_model_usage",
+            "get_tool_usage",
+        ]:
+            assert expected in tool_names
+
+        # Call them
+        res_cost = await client.call_tool("get_cost_estimate", {})
+        assert isinstance(res_cost.data, dict)
+
+        res_trends = await client.call_tool("get_usage_trends", {})
+        assert isinstance(res_trends.data, list)
+
+        res_models = await client.call_tool("get_model_usage", {})
+        assert isinstance(res_models.data, list)
+
+        res_tools = await client.call_tool("get_tool_usage", {})
+        assert isinstance(res_tools.data, list)

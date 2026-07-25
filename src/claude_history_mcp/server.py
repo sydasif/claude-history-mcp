@@ -64,7 +64,11 @@ def list_sessions(
     try:
         engine = _get_engine()
         return engine.list_sessions(
-            project=project, from_date=from_date, to_date=to_date, limit=limit, offset=offset
+            project=project,
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+            offset=offset,
         )
     except Exception as e:
         return [{"error": str(e)}]
@@ -216,7 +220,9 @@ def search_history(
 
 
 @mcp.tool
-def get_recent_activity(hours: int = 24, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+def get_recent_activity(
+    hours: int = 24, limit: int = 100, offset: int = 0
+) -> list[dict[str, Any]]:
     """Get recent Claude Code activity across all projects.
 
     Shows the most recent messages (user prompts and assistant responses)
@@ -230,6 +236,74 @@ def get_recent_activity(hours: int = 24, limit: int = 100, offset: int = 0) -> l
     try:
         engine = _get_engine()
         return engine.get_recent_activity(hours=hours, limit=limit, offset=offset)
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def get_cost_estimate(
+    project: str | None = None,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Calculate estimated cost in USD based on model token counts.
+
+    Args:
+        project: Filter by project path or name
+        session_id: Filter by specific session ID
+    """
+    try:
+        engine = _get_engine()
+        return engine.get_cost_estimate(project=project, session_id=session_id)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def get_usage_trends(
+    project: str | None = None,
+    days: int = 30,
+) -> list[dict[str, Any]]:
+    """Get daily usage trends (message count, input/output tokens) grouped by date.
+
+    Args:
+        project: Filter by project path or name
+        days: Number of past days to include (default 30)
+    """
+    try:
+        engine = _get_engine()
+        return engine.get_usage_trends(project=project, days=days)
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def get_model_usage(
+    project: str | None = None,
+) -> list[dict[str, Any]]:
+    """Get usage breakdown grouped by model with estimated costs.
+
+    Args:
+        project: Filter by project path or name
+    """
+    try:
+        engine = _get_engine()
+        return engine.get_model_usage(project=project)
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def get_tool_usage(
+    project: str | None = None,
+) -> list[dict[str, Any]]:
+    """Get tool usage frequency ranking across messages.
+
+    Args:
+        project: Filter by project path or name
+    """
+    try:
+        engine = _get_engine()
+        return engine.get_tool_usage(project=project)
     except Exception as e:
         return [{"error": str(e)}]
 
