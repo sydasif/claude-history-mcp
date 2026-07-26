@@ -22,10 +22,10 @@ uv run python -m claude_history_mcp.server  # Run the MCP server directly
 ~/.claude/history.jsonl        ─┤── discovery → loader → parser → SQLite cache → SearchEngine → FastMCP tools
 ```
 
-- **claude-code-log library** — Handles all JSONL parsing edge cases (surrogates, missing timestamps, dual sessionId/session_id, truncated tool names, tool_result variants, API errors, etc.)
+- **Local JSONL parser** — Handles all real-world edge cases (surrogates, missing timestamps, dual sessionId/session_id, truncated tool names, tool_result variants, API errors, etc.)
 - **discovery.py** — Scans `~/.claude/projects/` for directories containing JSONL files. Each directory is a "project" (encoded path like `-home-zulu-my-project`). Returns `ProjectInfo`/`SessionFileInfo` dataclasses.
 - **loader.py** — Reads JSONL files line-by-line, delegates to library parser, inserts results into our cache. Tracks file mtimes so only changed files are reparsed. `load_history_file()` called on every start (idempotent via INSERT OR IGNORE).
-- **parser.py** — Thin wrapper over library's `create_transcript_entry()` and `extract_text_content()`. `SILENT_SKIP_TYPES` drops 10+ non-essential entry types.
+- **parser.py** — Typed Pydantic models for transcript entries + JSONL parsing logic. `create_entry()` for JSONL → typed model, re-exports `parse_timestamp` from utils.
 - **cache.py** — SQLite with WAL mode, threading lock. 5 tables: `projects`, `sessions`, `messages`, `history_commands`, `file_tracking`. `recompute_project_stats()` rolls up session aggregates to parent project.
 - **search.py** — `SearchEngine` wraps `CacheManager` with natural-language date parsing (`dateparser`), prefix-based session-ID matching, and post-filtering for tool names and dates.
 - **models.py** — Re-exports library types (`TranscriptEntry`, `UserTranscriptEntry`, etc.) + MCP-specific response models (`SessionSummary`, `ProjectInfo`, `MessageResult`, etc.)
@@ -54,7 +54,7 @@ Defined in `pyproject.toml` as `claude-history-mcp` (dashes): calls `claude_hist
 Tools accept natural-language date strings ("yesterday", "last week") via `dateparser`.
 All list/search tools support `offset` parameter for cursor-based pagination.
 
-### Real-World Edge Cases (handled by claude-code-log library)
+### Real-World Edge Cases (handled by local parser)
 
 - ~21% of entries lack timestamps — these survive date filtering per spec 3.2
 - `sessionId` vs `session_id` — prefer camelCase, fall back to snake_case
@@ -65,7 +65,7 @@ All list/search tools support `offset` parameter for cursor-based pagination.
 
 ### Recent Fixes (2026-07-24)
 
-1. **Library dependency** — Now uses `claude-code-log` library for all parsing instead of maintaining duplicate code
+1. **Library dependency** — Removed `claude-code-log` dependency; parsing is now handled by local Pydantic models and parser to eliminate 20+ transitive dependencies.
 2. **`get_recent_activity` limit parameter** — Added optional `limit` parameter (default 100) to prevent token overflow on large result sets
 3. **Timezone handling** — `parse_timestamp()` and `_parse_natural_date()` return naive UTC datetimes for consistent comparison
 4. **Silent skip types expanded** — Added `file-history-delta`, `pr-link` to skip list
