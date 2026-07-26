@@ -1,30 +1,243 @@
-"""MCP-specific models built on top of claude-code-log library types.
+"""Pydantic models for Claude Code transcript JSON structures.
 
-This module re-exports library types and adds MCP-specific response models.
+Local definitions replacing claude-code-log library types. Only the subset
+needed by the MCP server is defined here.
 """
 
-from typing import Any
+from typing import Any, Literal, Optional, Union
+
 from pydantic import BaseModel
 
-from claude_code_log.models import (
-    UserTranscriptEntry as UserEntry,
-    AssistantTranscriptEntry as AssistantEntry,
-    SystemTranscriptEntry as SystemEntry,
-    SummaryTranscriptEntry as SummaryEntry,
-    AiTitleTranscriptEntry as AiTitleEntry,
-    AttachmentTranscriptEntry as AttachmentEntry,
-    QueueOperationTranscriptEntry as QueueOperationEntry,
-    BaseTranscriptEntry as BaseEntry,
-    TranscriptEntry,
+
+# =============================================================================
+# Content Types (from message.content arrays)
+# =============================================================================
+
+
+class TextContent(BaseModel):
+    """Text content block within a message content array."""
+
+    type: Literal["text"]
+    text: str
+
+
+class ImageSource(BaseModel):
+    """Base64-encoded image source data."""
+
+    type: Literal["base64"]
+    media_type: str
+    data: str
+
+
+class ImageContent(BaseModel):
+    """Image content within a content array."""
+
+    type: Literal["image"]
+    source: ImageSource
+
+
+class UsageInfo(BaseModel):
+    """Token usage information for tracking API consumption."""
+
+    input_tokens: Optional[int] = None
+    cache_creation_input_tokens: Optional[int] = None
+    cache_read_input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    service_tier: Optional[str] = None
+    server_tool_use: Optional[dict[str, Any]] = None
+
+
+class ToolUseContent(BaseModel):
+    """Tool invocation content block."""
+
+    type: Literal["tool_use"]
+    id: str
+    name: str
+    input: dict[str, Any]
+
+
+class ToolResultContent(BaseModel):
+    """Tool result content block."""
+
+    type: Literal["tool_result"]
+    tool_use_id: str
+    content: Union[str, list[dict[str, Any]]]
+    is_error: Optional[bool] = None
+    agentId: Optional[str] = None
+
+
+class ThinkingContent(BaseModel):
+    """Thinking/reasoning content block."""
+
+    type: Literal["thinking"]
+    thinking: str
+    signature: Optional[str] = None
+
+
+# Content item types that appear in message content arrays
+ContentItem = Union[
     TextContent,
     ToolUseContent,
     ToolResultContent,
     ThinkingContent,
     ImageContent,
-    UsageInfo,
-)
+]
 
-# Re-export library types for backward compatibility
+
+# =============================================================================
+# Message Models (within transcript entries)
+# =============================================================================
+
+
+class UserMessageModel(BaseModel):
+    """User message model."""
+
+    role: Literal["user"]
+    content: list[ContentItem]
+    usage: Optional[UsageInfo] = None
+
+
+class AssistantMessageModel(BaseModel):
+    """Assistant message model."""
+
+    id: str
+    type: Literal["message"]
+    role: Literal["assistant"]
+    model: str
+    content: list[ContentItem]
+    stop_reason: Optional[str] = None
+    stop_sequence: Optional[str] = None
+    usage: Optional[UsageInfo] = None
+
+
+ToolUseResult = Union[
+    str,
+    list[Any],
+    dict[str, Any],
+]
+
+
+# =============================================================================
+# Transcript Entry Types
+# =============================================================================
+
+
+class BaseEntry(BaseModel):
+    """Base transcript entry with common fields."""
+
+    parentUuid: Optional[str] = None
+    isSidechain: bool = False
+    userType: str = ""
+    cwd: str = ""
+    sessionId: str = ""
+    version: str = ""
+    uuid: str = ""
+    timestamp: str = ""
+    isMeta: Optional[bool] = None
+    agentId: Optional[str] = None
+    gitBranch: Optional[str] = None
+    teamName: Optional[str] = None
+    spawnedAgentId: Optional[str] = None
+
+
+class UserEntry(BaseEntry):
+    """User transcript entry."""
+
+    type: Literal["user"]
+    message: UserMessageModel
+    toolUseResult: Optional[ToolUseResult] = None
+    sourceToolUseID: Optional[str] = None
+
+
+class AssistantEntry(BaseEntry):
+    """Assistant transcript entry."""
+
+    type: Literal["assistant"]
+    message: AssistantMessageModel
+    requestId: Optional[str] = None
+
+
+class SummaryEntry(BaseModel):
+    """Summary transcript entry."""
+
+    type: Literal["summary"]
+    summary: str
+    leafUuid: str
+    cwd: Optional[str] = None
+    sessionId: Optional[str] = None
+
+
+class AiTitleEntry(BaseModel):
+    """AI-generated session title."""
+
+    type: Literal["ai-title"]
+    aiTitle: str
+    sessionId: str
+
+
+class SystemEntry(BaseEntry):
+    """System messages (warnings, notifications, hooks)."""
+
+    type: Literal["system"]
+    content: Optional[str] = None
+    subtype: Optional[str] = None
+    level: Optional[str] = None
+    hasOutput: Optional[bool] = None
+    hookErrors: Optional[list[str]] = None
+    hookInfos: Optional[list[dict[str, Any]]] = None
+    preventedContinuation: Optional[bool] = None
+    compactMetadata: Optional[dict[str, Any]] = None
+
+
+class QueueOperationEntry(BaseModel):
+    """Queue operations (enqueue/dequeue/remove)."""
+
+    type: Literal["queue-operation"]
+    operation: Literal["enqueue", "dequeue", "remove", "popAll"]
+    timestamp: str
+    sessionId: str
+    content: Optional[Union[list[ContentItem], str]] = None
+
+
+class AttachmentEntry(BaseEntry):
+    """Out-of-band attachment entry (hook callbacks, etc.)."""
+
+    type: Literal["attachment"]
+    attachment: dict[str, Any] = {}
+    userType: str = "external"
+    cwd: str = ""
+    version: str = ""
+
+
+class PassthroughEntry(BaseModel):
+    """Structural-only entry for unknown types with DAG fields."""
+
+    uuid: str
+    parentUuid: Optional[str] = None
+    sessionId: str
+    timestamp: str
+    type: Optional[str] = None
+    isSidechain: bool = False
+    agentId: Optional[str] = None
+
+
+# Combined union for transcript entries
+TranscriptEntry = Union[
+    UserEntry,
+    AssistantEntry,
+    SummaryEntry,
+    AiTitleEntry,
+    SystemEntry,
+    QueueOperationEntry,
+    AttachmentEntry,
+    PassthroughEntry,
+]
+
+
+# =============================================================================
+# Types to skip during parsing (not needed for search indexing)
+# =============================================================================
+
 SILENT_SKIP_TYPES = frozenset(
     {
         "file-history-snapshot",
@@ -38,7 +251,10 @@ SILENT_SKIP_TYPES = frozenset(
     }
 )
 
-# MCP Response Models (new - not in library)
+
+# =============================================================================
+# MCP Response Models
+# =============================================================================
 
 
 class HistoryCommand(BaseModel):
@@ -126,13 +342,16 @@ class RecentActivityEntry(BaseModel):
     text_preview: str
 
 
-# Combined union for transcript entry (for backward compatibility)
-# TranscriptEntry is already imported from claude_code_log.models
-
-
 __all__ = [
-    # Library types (re-exported)
-    "TranscriptEntry",
+    # Content types
+    "TextContent",
+    "ToolUseContent",
+    "ToolResultContent",
+    "ThinkingContent",
+    "ImageContent",
+    "UsageInfo",
+    # Transcript entry types
+    "BaseEntry",
     "UserEntry",
     "AssistantEntry",
     "SystemEntry",
@@ -140,15 +359,11 @@ __all__ = [
     "AiTitleEntry",
     "AttachmentEntry",
     "QueueOperationEntry",
-    "BaseEntry",
-    "TextContent",
-    "ToolUseContent",
-    "ToolResultContent",
-    "ThinkingContent",
-    "ImageContent",
-    "UsageInfo",
+    "PassthroughEntry",
+    "TranscriptEntry",
+    # Constants
     "SILENT_SKIP_TYPES",
-    # MCP-specific models
+    # MCP response models
     "HistoryCommand",
     "SessionSummary",
     "ProjectInfo",

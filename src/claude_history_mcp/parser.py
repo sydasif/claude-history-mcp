@@ -1,35 +1,26 @@
-"""Parse raw JSON dicts using claude-code-log library, extract searchable text."""
+"""Parse raw JSON dicts into typed models, extract searchable text."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from datetime import datetime
-
-from claude_code_log.api import (
-    create_transcript_entry,
-    parse_timestamp as lib_parse_timestamp,
-)
-
-from claude_code_log.models import (
-    TextContent,
-    ThinkingContent,
-    ToolUseContent,
-    ToolResultContent,
-)
+from typing import Any
 
 from .models import (
     SILENT_SKIP_TYPES,
-    BaseEntry,
-    UserEntry,
-    AssistantEntry,
-    SystemEntry,
-    SummaryEntry,
     AiTitleEntry,
     AttachmentEntry,
+    BaseEntry,
+    PassthroughEntry,
     QueueOperationEntry,
+    SummaryEntry,
+    SystemEntry,
+    TextContent,
+    ThinkingContent,
+    ToolResultContent,
+    ToolUseContent,
+    UserEntry,
+    AssistantEntry,
 )
+from .utils import parse_timestamp
 
 
 def create_entry(data: dict[str, Any]) -> Any | None:
@@ -38,14 +29,37 @@ def create_entry(data: dict[str, Any]) -> Any | None:
     if entry_type in SILENT_SKIP_TYPES:
         return None
 
-    # Use library's create_transcript_entry for proper validation
     try:
-        return create_transcript_entry(data)
+        if entry_type == "user":
+            return UserEntry.model_validate(data)
+        elif entry_type == "assistant":
+            return AssistantEntry.model_validate(data)
+        elif entry_type == "summary":
+            return SummaryEntry.model_validate(data)
+        elif entry_type == "ai-title":
+            return AiTitleEntry.model_validate(data)
+        elif entry_type == "system":
+            return SystemEntry.model_validate(data)
+        elif entry_type == "queue-operation":
+            return QueueOperationEntry.model_validate(data)
+        elif entry_type == "attachment":
+            return AttachmentEntry.model_validate(data)
+        elif data.get("uuid") and data.get("sessionId"):
+            # Unknown type with DAG fields - keep for searchability
+            return PassthroughEntry(
+                uuid=data["uuid"],
+                parentUuid=data.get("parentUuid"),
+                sessionId=data["sessionId"],
+                timestamp=data.get("timestamp", ""),
+                type=entry_type,
+                isSidechain=data.get("isSidechain", False),
+                agentId=data.get("agentId"),
+            )
+        return None
     except Exception:
-        # Malformed data - create a PassthroughTranscriptEntry to keep it searchable
+        # Malformed data - try to create a PassthroughEntry if possible
         if data.get("uuid") and data.get("sessionId"):
-            from claude_code_log.models import PassthroughTranscriptEntry
-            return PassthroughTranscriptEntry(
+            return PassthroughEntry(
                 uuid=data["uuid"],
                 parentUuid=data.get("parentUuid"),
                 sessionId=data["sessionId"],
@@ -169,17 +183,3 @@ def get_entry_tokens(entry: Any) -> tuple[int, int]:
     if usage:
         return (getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
     return (0, 0)
-
-
-def parse_timestamp(ts: str | None) -> datetime | None:
-    """Parse ISO 8601 timestamp to datetime. Returns None for missing/invalid.
-
-    Args:
-        ts: ISO 8601 timestamp string (with or without Z suffix).
-
-    Returns:
-        Naive UTC datetime for consistent comparison, or None if missing/invalid.
-    """
-    if ts is None:
-        return None
-    return lib_parse_timestamp(ts)

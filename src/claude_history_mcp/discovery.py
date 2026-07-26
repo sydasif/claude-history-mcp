@@ -1,10 +1,9 @@
-"""Discover Claude Code project directories and session JSONL files using claude-code-log library."""
+"""Discover Claude Code project directories and session JSONL files."""
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
-import json
 
-from claude_code_log.api import discover_projects as lib_discover_projects, find_history_file
 from .utils import get_projects_dir
 
 
@@ -30,21 +29,20 @@ def discover_projects(projects_dir: Path | None = None) -> list[ProjectInfo]:
     if not projects_dir.exists():
         return []
 
-    # Use library's discover_projects which returns Path objects
-    lib_projects = lib_discover_projects(projects_dir)
     projects = []
-    for lib_proj in lib_projects:
-        jsonl_files = sorted(lib_proj.glob("*.jsonl"))
-        if not jsonl_files:
-            continue
-        display_name = _extract_display_name(jsonl_files[0]) or lib_proj.name
-        projects.append(
-            ProjectInfo(
-                display_name=display_name,
-                path=lib_proj,
-                jsonl_files=jsonl_files,
+    for entry in projects_dir.iterdir():
+        if entry.is_dir() and not entry.name.startswith("."):
+            jsonl_files = sorted(entry.glob("*.jsonl"))
+            if not jsonl_files:
+                continue
+            display_name = _extract_display_name(jsonl_files[0]) or entry.name
+            projects.append(
+                ProjectInfo(
+                    display_name=display_name,
+                    path=entry,
+                    jsonl_files=jsonl_files,
+                )
             )
-        )
     return projects
 
 
@@ -87,4 +85,5 @@ def _extract_display_name(jsonl_path: Path) -> str | None:
 
 def get_history_file() -> Path | None:
     """Find ~/.claude/history.jsonl."""
-    return find_history_file()
+    history = Path.home() / ".claude" / "history.jsonl"
+    return history if history.exists() else None

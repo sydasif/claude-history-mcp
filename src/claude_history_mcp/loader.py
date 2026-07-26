@@ -1,22 +1,21 @@
-"""Read JSONL files, parse using claude-code-log library, store searchable fields in our cache."""
+"""Read JSONL files, parse into typed models, store searchable fields in cache."""
 
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from claude_code_log.api import (
-    create_transcript_entry,
-)
 from .cache import CacheManager as OurCacheManager
 from .discovery import discover_projects, _extract_display_name
 from .parser import (
+    create_entry,
     extract_text,
     extract_tool_names,
     get_entry_text,
     get_entry_tokens,
+    parse_timestamp,
 )
-from .utils import parse_timestamp, scrub_surrogates
+from .utils import scrub_surrogates
 
 _SILENT_SKIP_TYPES: frozenset[str] = frozenset(
     {
@@ -51,7 +50,7 @@ def load_jsonl_file(
     cache: OurCacheManager,
     project_id: int,
 ) -> LoadResult:
-    """Parse a single JSONL file using claude-code-log library and store in our cache."""
+    """Parse a single JSONL file and store in our cache."""
     session_id = file_path.stem
     parsed_entries = []
     first_user_message = ""
@@ -75,14 +74,13 @@ def load_jsonl_file(
                 errors += 1
                 continue
 
-            # Use library's create_transcript_entry to validate
-            # Skip known types that library doesn't handle but we don't care about
+            # Skip known types we don't care about
             entry_type = data.get("type", "")
             if entry_type in _SILENT_SKIP_TYPES:
                 continue
 
-            # Use library's create_transcript_entry to validate
-            entry = create_transcript_entry(data)
+            # Parse into typed model
+            entry = create_entry(data)
             if entry is None:
                 errors += 1
                 continue

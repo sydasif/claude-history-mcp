@@ -1,23 +1,20 @@
-"""Tests for parser using claude-code-log library models."""
+"""Tests for parser functions."""
 
 from typing import Any, cast
-from claude_code_log.api import create_transcript_entry
-from claude_code_log.models import (
-    UserTranscriptEntry as UserEntry,
-    AssistantTranscriptEntry as AssistantEntry,
-    SystemTranscriptEntry as SystemEntry,
-    SummaryTranscriptEntry as SummaryEntry,
-    AiTitleTranscriptEntry as AiTitleEntry,
-    AttachmentTranscriptEntry as AttachmentEntry,
-    QueueOperationTranscriptEntry as QueueOperationEntry,
-    BaseTranscriptEntry as BaseEntry,
-    TextContent,
-    ToolUseContent,
-    ToolResultContent,
-    ThinkingContent,
-    ImageContent,
-)
 
+from claude_history_mcp.models import (
+    AiTitleEntry,
+    AttachmentEntry,
+    AssistantEntry,
+    PassthroughEntry,
+    QueueOperationEntry,
+    SummaryEntry,
+    SystemEntry,
+    TextContent,
+    ThinkingContent,
+    ToolUseContent,
+    UserEntry,
+)
 from claude_history_mcp.parser import (
     create_entry,
     extract_text,
@@ -25,8 +22,8 @@ from claude_history_mcp.parser import (
     extract_tool_result_text,
     get_entry_text,
     get_entry_tokens,
+    parse_timestamp,
 )
-from claude_history_mcp.utils import parse_timestamp
 
 
 def test_create_entry_user():
@@ -118,9 +115,7 @@ def test_create_entry_unknown_with_uuid():
         "parentUuid": None,
         "isSidechain": False,
     })
-    # Unknown types with uuid become PassthroughTranscriptEntry from library
-    from claude_code_log.models import PassthroughTranscriptEntry
-    assert isinstance(entry, PassthroughTranscriptEntry)
+    assert isinstance(entry, PassthroughEntry)
 
 
 def test_create_entry_unknown_without_uuid():
@@ -131,11 +126,10 @@ def test_create_entry_unknown_without_uuid():
 
 
 def test_create_entry_malformed_user_falls_back():
-    # message is wrong shape entirely -> should fall back to PassthroughTranscriptEntry, not raise
+    # message is wrong shape entirely -> should fall back to PassthroughEntry, not raise
     entry = create_entry({"type": "user", "uuid": "u1", "sessionId": "s1", "message": "not-a-dict"})
-    from claude_code_log.models import PassthroughTranscriptEntry
     assert entry is not None
-    assert isinstance(entry, PassthroughTranscriptEntry)
+    assert isinstance(entry, PassthroughEntry)
 
 
 def test_extract_text_mixed_blocks():
@@ -248,10 +242,7 @@ def test_parse_timestamp_invalid():
 
 
 def test_attachment_and_queue_operation_registered():
-    """Regression test: spec 2.3 lists `attachment` and `queue-operation` as
-    real entry types that must be parseable by create_entry."""
-    from claude_code_log.models import AttachmentTranscriptEntry, QueueOperationTranscriptEntry
-
+    """Regression test: attachment and queue-operation must be parseable by create_entry."""
     attachment = create_entry(
         {
             "type": "attachment",
@@ -263,7 +254,6 @@ def test_attachment_and_queue_operation_registered():
             "cwd": "/tmp",
             "version": "1.0",
             "timestamp": "2024-01-01T00:00:00Z",
-            "message": {"role": "user", "content": [{"type": "text", "text": "an attachment"}], "usage": None},
         }
     )
-    assert isinstance(attachment, AttachmentTranscriptEntry)
+    assert isinstance(attachment, AttachmentEntry)

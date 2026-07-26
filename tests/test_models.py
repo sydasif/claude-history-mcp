@@ -1,32 +1,31 @@
-"""Tests for models using claude-code-log library models."""
+"""Tests for local Pydantic models."""
 
 from typing import Any, cast
-from claude_code_log.models import (
-    UserTranscriptEntry as UserEntry,
-    AssistantTranscriptEntry as AssistantEntry,
-    SystemTranscriptEntry as SystemEntry,
-    SummaryTranscriptEntry as SummaryEntry,
-    AiTitleTranscriptEntry as AiTitleEntry,
-    AttachmentTranscriptEntry as AttachmentEntry,
-    QueueOperationTranscriptEntry as QueueOperationEntry,
-    BaseTranscriptEntry as BaseEntry,
-    TextContent,
-    ToolUseContent,
-    ToolResultContent,
-    ThinkingContent,
-    ImageContent,
-    UsageInfo,
-)
 
 from claude_history_mcp.models import (
-    HistoryCommand,
-    SessionSummary,
-    ProjectInfo,
+    AiTitleEntry,
+    AttachmentEntry,
+    BaseEntry,
+    ImageContent,
     MessageResult,
-    SessionStats,
-    SessionTranscript,
+    PassthroughEntry,
+    ProjectInfo,
+    QueueOperationEntry,
     RecentActivityEntry,
+    SessionStats,
+    SessionSummary,
+    SessionTranscript,
+    SummaryEntry,
+    SystemEntry,
+    TextContent,
+    ThinkingContent,
+    ToolResultContent,
+    ToolUseContent,
+    UsageInfo,
+    UserEntry,
+    AssistantEntry,
     SILENT_SKIP_TYPES,
+    HistoryCommand,
 )
 
 
@@ -174,7 +173,6 @@ def test_history_command_from_dict():
 
 
 def test_user_entry_missing_message_no_crash():
-    # Library requires message field - provide minimal valid one
     entry = UserEntry(
         type="user",
         uuid="u1",
@@ -187,12 +185,10 @@ def test_user_entry_missing_message_no_crash():
         timestamp="2024-01-01T00:00:00Z",
         message=cast(Any, {"role": "user", "content": [], "usage": None}),
     )
-    # Just verify it doesn't crash
     assert entry is not None
 
 
 def test_assistant_entry_error_true():
-    # Library uses requestId instead of error field
     entry = AssistantEntry(
         type="assistant",
         uuid="a1",
@@ -212,3 +208,14 @@ def test_assistant_entry_error_true():
 def test_thinking_content_signature_optional():
     c = ThinkingContent(type="thinking", thinking="hmm")
     assert c.signature is None
+
+
+def test_passthrough_entry():
+    entry = PassthroughEntry(
+        uuid="p1",
+        sessionId="s1",
+        timestamp="2024-01-01T00:00:00Z",
+        type="unknown-type",
+    )
+    assert entry.uuid == "p1"
+    assert entry.type == "unknown-type"

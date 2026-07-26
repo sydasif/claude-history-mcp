@@ -9,7 +9,6 @@ dependencies = [
     "fastmcp>=3.4",
     "pydantic>=2.0",
     "dateparser>=1.0",
-    "claude-code-log @ git+https://github.com/sydasif/claude-code-log@add-library-api",
 ]
 
 [project.optional-dependencies]
