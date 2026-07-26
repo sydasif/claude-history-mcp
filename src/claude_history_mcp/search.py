@@ -362,33 +362,62 @@ class SearchEngine:
             },
         }
 
-    def get_usage_trends(
-        self, project: str | None = None, days: int = 30
-    ) -> list[dict]:
-        """Get daily usage trends (messages, tokens)."""
-        project_id = self._resolve_project_id(project) if project else None
-        return self.cache.get_usage_trends(project_id=project_id, limit_days=days)
-
-    def get_model_usage(self, project: str | None = None) -> list[dict]:
+    def get_model_usage(
+        self,
+        project: str | None = None,
+        include_totals: bool = False,
+        session_id: str | None = None,
+    ) -> list[dict] | dict:
         """Get model breakdown with cost estimates."""
         project_id = self._resolve_project_id(project) if project else None
-        rows = self.cache.get_model_usage(project_id=project_id)
+
+        if session_id:
+            rows = self.cache.get_cost_data(
+                project_id=project_id, session_id=session_id
+            )
+        else:
+            rows = self.cache.get_model_usage(project_id=project_id)
 
         result = []
+        total_cost = 0.0
+        total_input = 0
+        total_output = 0
+        model_costs: dict[str, float] = {}
+
         for r in rows:
-            model = r["model"]
-            inp = r["input_tokens"]
-            out = r["output_tokens"]
+            # Handle both model_usage and cost_data structure
+            model = r.get("model") or "unknown"
+            inp = r.get("input_tokens") or r.get("tokens_input") or 0
+            out = r.get("output_tokens") or r.get("tokens_output") or 0
             cost = calculate_cost(model, inp, out)
-            result.append(
-                {
-                    "model": model,
-                    "message_count": r["message_count"],
-                    "input_tokens": inp,
-                    "output_tokens": out,
-                    "estimated_cost_usd": round(cost, 4),
-                }
-            )
+
+            if not session_id:
+                result.append(
+                    {
+                        "model": model,
+                        "message_count": r.get("message_count", 0),
+                        "input_tokens": inp,
+                        "output_tokens": out,
+                        "estimated_cost_usd": round(cost, 4),
+                    }
+                )
+
+            total_input += inp
+            total_output += out
+            total_cost += cost
+            model_costs[model] = model_costs.get(model, 0.0) + cost
+
+        if include_totals:
+            return {
+                "breakdown": result,
+                "total_cost_usd": round(total_cost, 4),
+                "total_input_tokens": total_input,
+                "total_output_tokens": total_output,
+                "cost_by_model": {
+                    k: round(v, 4)
+                    for k, v in sorted(model_costs.items(), key=lambda x: -x[1])
+                },
+            }
         return result
 
     def get_tool_usage(self, project: str | None = None) -> list[dict]:
@@ -416,50 +445,18 @@ class SearchEngine:
             project_id=project_id, limit_sessions=limit_sessions
         )
 
-    # --- Session Search by Pattern (glob-style) ---
-    def search_sessions_by_pattern(
-        self,
-        pattern: str,
-        project: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[dict]:
-        """Search sessions using glob-style pattern matching on session_id.
-
-        Args:
-            pattern: Glob pattern (e.g., "2024-01-*", "abc-*-def") or substring
-            project: Optional project filter
-            limit: Max results (default 50)
-            offset: Pagination offset (default 0)
-
-        Returns:
-            List of matching sessions with metadata.
-        """
-        import fnmatch
-
-        sessions = self.cache.get_sessions(limit=1000)
-        project_id = self._resolve_project_id(project) if project else None
-
-        if project_id:
-            projects = self.cache.get_all_projects()
-            project_path = next(
-                (p["project_path"] for p in projects if p["id"] == project_id), None
-            )
-            if project_path:
-                sessions = [
-                    s for s in sessions if s.get("project_path") == project_path
-                ]
-
-        matches = [s for s in sessions if fnmatch.fnmatch(s["session_id"], pattern)]
-
-        return matches[offset : offset + limit]
-
     # --- Project Stats (aggregated) ---
-    def get_project_stats(self, project: str) -> dict | None:
+    def get_project_stats(
+        self, project: str, detail_level: str = "full"
+    ) -> dict | None:
         """Get aggregated statistics for a project.
 
         Args:
             project: Project path or display name (partial match)
+            detail_level: "basic" or "full".
+                - "basic": Returns only fields matching list_projects (id, project_path, display_name,
+                  earliest_timestamp, latest_timestamp, total_messages, total_input_tokens, total_output_tokens)
+                - "full": Returns all stats including session_count, unique_models, top_tools, etc.
 
         Returns:
             Dict with aggregated stats or None if not found.
@@ -497,6 +494,18 @@ class SearchEngine:
             "FROM sessions WHERE project_id=?",
             (project_id,),
         ).fetchone()
+
+        if detail_level == "basic":
+            return {
+                "id": proj.get("id"),
+                "project_path": proj.get("project_path"),
+                "display_name": proj.get("display_name"),
+                "earliest_timestamp": proj.get("earliest_timestamp"),
+                "latest_timestamp": proj.get("latest_timestamp"),
+                "total_messages": proj.get("total_messages", 0),
+                "total_input_tokens": proj.get("total_input_tokens", 0),
+                "total_output_tokens": proj.get("total_output_tokens", 0),
+            }
 
         # Unique models used
         models = conn.execute(

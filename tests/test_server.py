@@ -78,16 +78,6 @@ def isolated_home(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_projects():
-    from claude_history_mcp.server import mcp
-
-    async with Client(mcp) as client:
-        result = await client.call_tool("list_projects", {})
-        assert isinstance(result.data, list)
-        assert len(result.data) == 1
-
-
-@pytest.mark.asyncio
 async def test_list_sessions():
     from claude_history_mcp.server import mcp
 
@@ -150,7 +140,6 @@ async def test_server_has_expected_tools():
         tools = await client.list_tools()
         tool_names = [t.name for t in tools]
         expected = [
-            "list_projects",
             "list_sessions",
             "search_messages",
             "get_session",
@@ -182,22 +171,19 @@ async def test_new_analytics_tools():
         tools = await client.list_tools()
         tool_names = [t.name for t in tools]
         for expected in [
-            "get_cost_estimate",
-            "get_usage_trends",
             "get_model_usage",
             "get_tool_usage",
         ]:
             assert expected in tool_names
 
         # Call them
-        res_cost = await client.call_tool("get_cost_estimate", {})
-        assert isinstance(res_cost.data, dict)
-
-        res_trends = await client.call_tool("get_usage_trends", {})
-        assert isinstance(res_trends.data, list)
-
         res_models = await client.call_tool("get_model_usage", {})
         assert isinstance(res_models.data, list)
+
+        res_totals = await client.call_tool("get_model_usage", {"include_totals": True})
+        assert isinstance(res_totals.data, dict)
+        assert "breakdown" in res_totals.data
+        assert "total_cost_usd" in res_totals.data
 
         res_tools = await client.call_tool("get_tool_usage", {})
         assert isinstance(res_tools.data, list)
@@ -213,7 +199,6 @@ async def test_new_tree_and_export_tools():
         tool_names = [t.name for t in tools]
         for expected in [
             "get_project_tree",
-            "search_sessions_by_pattern",
             "get_project_stats",
         ]:
             assert expected in tool_names, f"Missing tool: {expected}"
@@ -226,19 +211,8 @@ async def test_new_tree_and_export_tools():
             assert "project_path" in proj
             assert "sessions" in proj
 
-        # Test search_sessions_by_pattern
-        sessions = await client.call_tool("list_sessions", {"limit": 1})
-        sid = sessions.data[0]["session_id"]
-        pattern = sid[:8] + "*"
-        res_search = await client.call_tool(
-            "search_sessions_by_pattern", {"pattern": pattern}
-        )
-        assert isinstance(res_search.data, list)
-        assert len(res_search.data) >= 1
-
         # Test get_project_stats
-        projects = await client.call_tool("list_projects", {})
-        proj_name = projects.data[0]["display_name"]
+        proj_name = res_tree.data[0]["display_name"]
         res_stats = await client.call_tool("get_project_stats", {"project": proj_name})
         assert isinstance(res_stats.data, dict)
         assert "project_path" in res_stats.data

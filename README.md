@@ -31,7 +31,7 @@
 | **Full-text search**       | Search across all session messages, tool outputs, and history commands                               |
 | **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                           |
 | **Incremental parsing**    | Only reparses files that changed (mtime-based SQLite cache)                                          |
-| **14 MCP tools**           | Search, list, filter, analyze — with pagination on all list/search tools                             |
+| **10 MCP tools**           | Search, list, filter, analyze — with pagination on all list/search tools                             |
 | **Cost analytics**         | Estimate token costs, usage trends, model breakdowns, and tool frequency                             |
 | **Session hierarchy**      | Tree view: projects → sessions → messages with glob pattern search                                   |
 | **Zero config**            | Points at your existing `~/.claude/` data — no setup, no API keys, no cloud                          |

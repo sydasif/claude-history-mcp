@@ -46,9 +46,9 @@ Defined in `pyproject.toml` as `claude-history-mcp` (dashes): calls `claude_hist
 
 ### MCP Tools & Resources
 
-7 tools, 2 resources — all defined in `server.py` with try/except wrappers returning `{"error": str(e)}` on failure:
+10 tools, 2 resources — all defined in `server.py` with try/except wrappers returning `{"error": str(e)}` on failure:
 
-- `list_projects()` / `list_sessions(project, from_date, to_date, limit, offset)` / `search_messages(query, project, session_id, role, tool_name, from_date, to_date, limit, offset)` / `get_session(session_id)` / `get_session_stats(session_id)` (prefix matching, min 8 chars) / `search_history(query, project, from_date, to_date, limit, offset)` / `get_recent_activity(hours=24, limit=100, offset=0)`
+- `list_sessions`, `search_messages`, `get_session`, `get_session_stats`, `search_history`, `get_recent_activity`, `get_model_usage(include_totals?, session_id?)`, `get_tool_usage`, `get_project_tree`, `get_project_stats(detail_level="basic|full")`
 - Resources: `claude://projects`, `claude://history`
 
 Tools accept natural-language date strings ("yesterday", "last week") via `dateparser`.

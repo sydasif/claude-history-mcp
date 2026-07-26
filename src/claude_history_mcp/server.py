@@ -1,4 +1,4 @@
-"""Claude History MCP Server — exposes session history as MCP tools."""
+"""Claude History MCP Server -- exposes session history as MCP tools."""
 
 from __future__ import annotations
 
@@ -29,19 +29,6 @@ def _get_engine() -> SearchEngine:
 
         _engine = initialize()
     return _engine
-
-
-@mcp.tool
-def list_projects() -> list[dict[str, Any]]:
-    """List all Claude Code projects with session counts and date ranges.
-
-    Returns project paths, display names, message counts, and timestamp ranges.
-    """
-    try:
-        engine = _get_engine()
-        return engine.list_projects()
-    except Exception as e:
-        return [{"error": str(e)}]
 
 
 @mcp.tool
@@ -241,55 +228,25 @@ def get_recent_activity(
 
 
 @mcp.tool
-def get_cost_estimate(
-    project: str | None = None,
-    session_id: str | None = None,
-) -> dict[str, Any]:
-    """Calculate estimated cost in USD based on model token counts.
-
-    Args:
-        project: Filter by project path or name
-        session_id: Filter by specific session ID
-    """
-    try:
-        engine = _get_engine()
-        return engine.get_cost_estimate(project=project, session_id=session_id)
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool
-def get_usage_trends(
-    project: str | None = None,
-    days: int = 30,
-) -> list[dict[str, Any]]:
-    """Get daily usage trends (message count, input/output tokens) grouped by date.
-
-    Args:
-        project: Filter by project path or name
-        days: Number of past days to include (default 30)
-    """
-    try:
-        engine = _get_engine()
-        return engine.get_usage_trends(project=project, days=days)
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
 def get_model_usage(
     project: str | None = None,
-) -> list[dict[str, Any]]:
+    include_totals: bool = False,
+    session_id: str | None = None,
+) -> list[dict[str, Any]] | dict[str, Any]:
     """Get usage breakdown grouped by model with estimated costs.
 
     Args:
         project: Filter by project path or name
+        include_totals: Whether to include total cost/tokens
+        session_id: Filter by specific session ID
     """
     try:
         engine = _get_engine()
-        return engine.get_model_usage(project=project)
+        return engine.get_model_usage(
+            project=project, include_totals=include_totals, session_id=session_id
+        )
     except Exception as e:
-        return [{"error": str(e)}]
+        return {"error": str(e)}
 
 
 @mcp.tool
@@ -313,7 +270,7 @@ def get_project_tree(
     project: str | None = None,
     limit_sessions: int = 50,
 ) -> list[dict[str, Any]]:
-    """Get hierarchical project tree: projects → sessions → message summaries.
+    """Get hierarchical project tree: projects -> sessions -> message summaries.
 
     Args:
         project: Filter by project path or name (partial match)
@@ -327,41 +284,21 @@ def get_project_tree(
 
 
 @mcp.tool
-def search_sessions_by_pattern(
-    pattern: str,
-    project: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[dict[str, Any]]:
-    """Search sessions using glob-style pattern matching on session_id.
-
-    Args:
-        pattern: Glob pattern (e.g., "2024-01-*", "abc-*-def") or substring
-        project: Filter by project path or name
-        limit: Maximum results (default 50)
-        offset: Pagination offset (default 0)
-    """
-    try:
-        engine = _get_engine()
-        return engine.search_sessions_by_pattern(
-            pattern=pattern, project=project, limit=limit, offset=offset
-        )
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
 def get_project_stats(
     project: str,
+    detail_level: str = "full",
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """Get aggregated statistics for a project.
 
     Args:
         project: Project path or display name (partial match)
+        detail_level: "basic" or "full".
+            - "basic": Returns only fields matching list_projects
+            - "full": Returns all stats including session_count, unique_models, top_tools, etc.
     """
     try:
         engine = _get_engine()
-        result = engine.get_project_stats(project=project)
+        result = engine.get_project_stats(project=project, detail_level=detail_level)
         if result is None:
             return {"error": f"Project not found: {project}"}
         return result

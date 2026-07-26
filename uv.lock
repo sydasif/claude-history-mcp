@@ -290,6 +290,9 @@ dev = [
     { name = "docsig" },
     { name = "docvet" },
     { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
     { name = "ruff" },
     { name = "vulture" },
 ]
@@ -311,6 +314,9 @@ dev = [
     { name = "docsig", specifier = ">=0.91.8" },
     { name = "docvet", specifier = ">=1.15.1" },
     { name = "mypy", specifier = ">=1.15" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.22" },
     { name = "vulture", specifier = ">=2.16" },
 ]

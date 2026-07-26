@@ -297,10 +297,6 @@ def test_analytics_methods(tmp_path):
     assert cost["total_output_tokens"] == 500
     assert cost["total_cost_usd"] > 0
 
-    trends = engine.get_usage_trends(project="My Project")
-    assert len(trends) == 1
-    assert trends[0]["message_count"] == 1
-
     models = engine.get_model_usage(project="My Project")
     assert len(models) == 1
     assert models[0]["model"] == "claude-sonnet-5"
