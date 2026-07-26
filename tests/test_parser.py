@@ -7,7 +7,6 @@ from claude_history_mcp.models import (
     AttachmentEntry,
     AssistantEntry,
     PassthroughEntry,
-    QueueOperationEntry,
     SummaryEntry,
     SystemEntry,
     TextContent,
@@ -22,112 +21,139 @@ from claude_history_mcp.parser import (
     extract_tool_result_text,
     get_entry_text,
     get_entry_tokens,
-    parse_timestamp,
 )
+from claude_history_mcp.utils import parse_timestamp
 
 
 def test_create_entry_user():
-    entry = create_entry({
-        "type": "user",
-        "uuid": "u1",
-        "sessionId": "s1",
-        "parentUuid": None,
-        "isSidechain": False,
-        "userType": "external",
-        "cwd": "/tmp",
-        "version": "1.0",
-        "timestamp": "2024-01-01T00:00:00Z",
-        "message": {"role": "user", "content": [], "usage": None}
-    })
+    entry = create_entry(
+        {
+            "type": "user",
+            "uuid": "u1",
+            "sessionId": "s1",
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/tmp",
+            "version": "1.0",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "message": {"role": "user", "content": [], "usage": None},
+        }
+    )
     assert isinstance(entry, UserEntry)
 
 
 def test_create_entry_assistant():
-    entry = create_entry({
-        "type": "assistant",
-        "uuid": "a1",
-        "sessionId": "s1",
-        "parentUuid": None,
-        "isSidechain": False,
-        "userType": "external",
-        "cwd": "/tmp",
-        "version": "1.0",
-        "timestamp": "2024-01-01T00:00:00Z",
-        "message": {"id": "msg-1", "type": "message", "role": "assistant", "content": [], "model": "claude-3", "usage": None},
-        "requestId": "req-1"
-    })
+    entry = create_entry(
+        {
+            "type": "assistant",
+            "uuid": "a1",
+            "sessionId": "s1",
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/tmp",
+            "version": "1.0",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "message": {
+                "id": "msg-1",
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": "claude-3",
+                "usage": None,
+            },
+            "requestId": "req-1",
+        }
+    )
     assert isinstance(entry, AssistantEntry)
 
 
 def test_create_entry_system():
-    entry = create_entry({
-        "type": "system",
-        "uuid": "s1",
-        "sessionId": "s1",
-        "parentUuid": None,
-        "isSidechain": False,
-        "userType": "external",
-        "cwd": "/tmp",
-        "version": "1.0",
-        "timestamp": "2024-01-01T00:00:00Z",
-        "content": "system message",
-    })
+    entry = create_entry(
+        {
+            "type": "system",
+            "uuid": "s1",
+            "sessionId": "s1",
+            "parentUuid": None,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": "/tmp",
+            "version": "1.0",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "content": "system message",
+        }
+    )
     assert isinstance(entry, SystemEntry)
 
 
 def test_create_entry_summary():
-    entry = create_entry({
-        "type": "summary",
-        "summary": "x",
-        "leafUuid": "leaf-1",
-    })
+    entry = create_entry(
+        {
+            "type": "summary",
+            "summary": "x",
+            "leafUuid": "leaf-1",
+        }
+    )
     assert isinstance(entry, SummaryEntry)
 
 
 def test_create_entry_ai_title():
-    entry = create_entry({
-        "type": "ai-title",
-        "aiTitle": "x",
-        "sessionId": "s1",
-    })
+    entry = create_entry(
+        {
+            "type": "ai-title",
+            "aiTitle": "x",
+            "sessionId": "s1",
+        }
+    )
     assert isinstance(entry, AiTitleEntry)
 
 
 def test_create_entry_skip_file_history_snapshot():
-    entry = create_entry({
-        "type": "file-history-snapshot",
-    })
+    entry = create_entry(
+        {
+            "type": "file-history-snapshot",
+        }
+    )
     assert entry is None
 
 
 def test_create_entry_skip_mode():
-    entry = create_entry({
-        "type": "mode",
-    })
+    entry = create_entry(
+        {
+            "type": "mode",
+        }
+    )
     assert entry is None
 
 
 def test_create_entry_unknown_with_uuid():
-    entry = create_entry({
-        "type": "some-future-type",
-        "uuid": "x1",
-        "sessionId": "s1",
-        "parentUuid": None,
-        "isSidechain": False,
-    })
+    entry = create_entry(
+        {
+            "type": "some-future-type",
+            "uuid": "x1",
+            "sessionId": "s1",
+            "parentUuid": None,
+            "isSidechain": False,
+        }
+    )
     assert isinstance(entry, PassthroughEntry)
 
 
 def test_create_entry_unknown_without_uuid():
-    entry = create_entry({
-        "type": "some-future-type",
-    })
+    entry = create_entry(
+        {
+            "type": "some-future-type",
+        }
+    )
     assert entry is None
 
 
 def test_create_entry_malformed_user_falls_back():
     # message is wrong shape entirely -> should fall back to PassthroughEntry, not raise
-    entry = create_entry({"type": "user", "uuid": "u1", "sessionId": "s1", "message": "not-a-dict"})
+    entry = create_entry(
+        {"type": "user", "uuid": "u1", "sessionId": "s1", "message": "not-a-dict"}
+    )
     assert entry is not None
     assert isinstance(entry, PassthroughEntry)
 
@@ -183,10 +209,16 @@ def test_get_entry_text_each_type():
 
     # System entry
     entry = SystemEntry(
-        type="system", content="c",
-        uuid="u1", sessionId="s1", parentUuid=None,
-        isSidechain=False, userType="external", cwd="/tmp",
-        version="1.0", timestamp="2024-01-01T00:00:00Z"
+        type="system",
+        content="c",
+        uuid="u1",
+        sessionId="s1",
+        parentUuid=None,
+        isSidechain=False,
+        userType="external",
+        cwd="/tmp",
+        version="1.0",
+        timestamp="2024-01-01T00:00:00Z",
     )
     assert get_entry_text(entry) == "c"
 
@@ -202,11 +234,14 @@ def test_get_entry_tokens():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message=cast(Any, {
-            "role": "user",
-            "content": [],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        })
+        message=cast(
+            Any,
+            {
+                "role": "user",
+                "content": [],
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            },
+        ),
     )
     assert get_entry_tokens(entry) == (10, 5)
 
@@ -222,7 +257,7 @@ def test_get_entry_tokens_no_usage():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message=cast(Any, {"role": "user", "content": []})
+        message=cast(Any, {"role": "user", "content": []}),
     )
     assert get_entry_tokens(entry) == (0, 0)
 

@@ -4,7 +4,7 @@ Local definitions replacing claude-code-log library types. Only the subset
 needed by the MCP server is defined here.
 """
 
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -39,12 +39,12 @@ class ImageContent(BaseModel):
 class UsageInfo(BaseModel):
     """Token usage information for tracking API consumption."""
 
-    input_tokens: Optional[int] = None
-    cache_creation_input_tokens: Optional[int] = None
-    cache_read_input_tokens: Optional[int] = None
-    output_tokens: Optional[int] = None
-    service_tier: Optional[str] = None
-    server_tool_use: Optional[dict[str, Any]] = None
+    input_tokens: int | None = None
+    cache_creation_input_tokens: int | None = None
+    cache_read_input_tokens: int | None = None
+    output_tokens: int | None = None
+    service_tier: str | None = None
+    server_tool_use: dict[str, Any] | None = None
 
 
 class ToolUseContent(BaseModel):
@@ -61,9 +61,9 @@ class ToolResultContent(BaseModel):
 
     type: Literal["tool_result"]
     tool_use_id: str
-    content: Union[str, list[dict[str, Any]]]
-    is_error: Optional[bool] = None
-    agentId: Optional[str] = None
+    content: str | list[dict[str, Any]]
+    is_error: bool | None = None
+    agentId: str | None = None
 
 
 class ThinkingContent(BaseModel):
@@ -71,17 +71,13 @@ class ThinkingContent(BaseModel):
 
     type: Literal["thinking"]
     thinking: str
-    signature: Optional[str] = None
+    signature: str | None = None
 
 
 # Content item types that appear in message content arrays
-ContentItem = Union[
-    TextContent,
-    ToolUseContent,
-    ToolResultContent,
-    ThinkingContent,
-    ImageContent,
-]
+ContentItem = (
+    TextContent | ToolUseContent | ToolResultContent | ThinkingContent | ImageContent
+)
 
 
 # =============================================================================
@@ -94,7 +90,7 @@ class UserMessageModel(BaseModel):
 
     role: Literal["user"]
     content: list[ContentItem]
-    usage: Optional[UsageInfo] = None
+    usage: UsageInfo | None = None
 
 
 class AssistantMessageModel(BaseModel):
@@ -105,16 +101,12 @@ class AssistantMessageModel(BaseModel):
     role: Literal["assistant"]
     model: str
     content: list[ContentItem]
-    stop_reason: Optional[str] = None
-    stop_sequence: Optional[str] = None
-    usage: Optional[UsageInfo] = None
+    stop_reason: str | None = None
+    stop_sequence: str | None = None
+    usage: UsageInfo | None = None
 
 
-ToolUseResult = Union[
-    str,
-    list[Any],
-    dict[str, Any],
-]
+ToolUseResult = str | list[Any] | dict[str, Any]
 
 
 # =============================================================================
@@ -125,7 +117,7 @@ ToolUseResult = Union[
 class BaseEntry(BaseModel):
     """Base transcript entry with common fields."""
 
-    parentUuid: Optional[str] = None
+    parentUuid: str | None = None
     isSidechain: bool = False
     userType: str = ""
     cwd: str = ""
@@ -133,11 +125,11 @@ class BaseEntry(BaseModel):
     version: str = ""
     uuid: str = ""
     timestamp: str = ""
-    isMeta: Optional[bool] = None
-    agentId: Optional[str] = None
-    gitBranch: Optional[str] = None
-    teamName: Optional[str] = None
-    spawnedAgentId: Optional[str] = None
+    isMeta: bool | None = None
+    agentId: str | None = None
+    gitBranch: str | None = None
+    teamName: str | None = None
+    spawnedAgentId: str | None = None
 
 
 class UserEntry(BaseEntry):
@@ -145,8 +137,8 @@ class UserEntry(BaseEntry):
 
     type: Literal["user"]
     message: UserMessageModel
-    toolUseResult: Optional[ToolUseResult] = None
-    sourceToolUseID: Optional[str] = None
+    toolUseResult: ToolUseResult | None = None
+    sourceToolUseID: str | None = None
 
 
 class AssistantEntry(BaseEntry):
@@ -154,7 +146,7 @@ class AssistantEntry(BaseEntry):
 
     type: Literal["assistant"]
     message: AssistantMessageModel
-    requestId: Optional[str] = None
+    requestId: str | None = None
 
 
 class SummaryEntry(BaseModel):
@@ -163,8 +155,8 @@ class SummaryEntry(BaseModel):
     type: Literal["summary"]
     summary: str
     leafUuid: str
-    cwd: Optional[str] = None
-    sessionId: Optional[str] = None
+    cwd: str | None = None
+    sessionId: str | None = None
 
 
 class AiTitleEntry(BaseModel):
@@ -179,14 +171,14 @@ class SystemEntry(BaseEntry):
     """System messages (warnings, notifications, hooks)."""
 
     type: Literal["system"]
-    content: Optional[str] = None
-    subtype: Optional[str] = None
-    level: Optional[str] = None
-    hasOutput: Optional[bool] = None
-    hookErrors: Optional[list[str]] = None
-    hookInfos: Optional[list[dict[str, Any]]] = None
-    preventedContinuation: Optional[bool] = None
-    compactMetadata: Optional[dict[str, Any]] = None
+    content: str | None = None
+    subtype: str | None = None
+    level: str | None = None
+    hasOutput: bool | None = None
+    hookErrors: list[str] | None = None
+    hookInfos: list[dict[str, Any]] | None = None
+    preventedContinuation: bool | None = None
+    compactMetadata: dict[str, Any] | None = None
 
 
 class QueueOperationEntry(BaseModel):
@@ -196,7 +188,7 @@ class QueueOperationEntry(BaseModel):
     operation: Literal["enqueue", "dequeue", "remove", "popAll"]
     timestamp: str
     sessionId: str
-    content: Optional[Union[list[ContentItem], str]] = None
+    content: list[ContentItem] | str | None = None
 
 
 class AttachmentEntry(BaseEntry):
@@ -213,25 +205,25 @@ class PassthroughEntry(BaseModel):
     """Structural-only entry for unknown types with DAG fields."""
 
     uuid: str
-    parentUuid: Optional[str] = None
+    parentUuid: str | None = None
     sessionId: str
     timestamp: str
-    type: Optional[str] = None
+    type: str | None = None
     isSidechain: bool = False
-    agentId: Optional[str] = None
+    agentId: str | None = None
 
 
 # Combined union for transcript entries
-TranscriptEntry = Union[
-    UserEntry,
-    AssistantEntry,
-    SummaryEntry,
-    AiTitleEntry,
-    SystemEntry,
-    QueueOperationEntry,
-    AttachmentEntry,
-    PassthroughEntry,
-]
+TranscriptEntry = (
+    UserEntry
+    | AssistantEntry
+    | SummaryEntry
+    | AiTitleEntry
+    | SystemEntry
+    | QueueOperationEntry
+    | AttachmentEntry
+    | PassthroughEntry
+)
 
 
 # =============================================================================
@@ -248,6 +240,8 @@ SILENT_SKIP_TYPES = frozenset(
         "agent-name",
         "agent-color",
         "frame-link",
+        "file-history-delta",
+        "pr-link",
     }
 )
 

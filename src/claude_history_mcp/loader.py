@@ -6,30 +6,15 @@ from pathlib import Path
 
 from .cache import CacheManager as OurCacheManager
 from .discovery import discover_projects, _extract_display_name
+from .models import SILENT_SKIP_TYPES
 from .parser import (
     create_entry,
     extract_text,
     extract_tool_names,
     get_entry_text,
     get_entry_tokens,
-    parse_timestamp,
 )
-from .utils import scrub_surrogates
-
-_SILENT_SKIP_TYPES: frozenset[str] = frozenset(
-    {
-        "file-history-snapshot",
-        "last-prompt",
-        "permission-mode",
-        "mode",
-        "custom-title",
-        "agent-name",
-        "agent-color",
-        "frame-link",
-        "file-history-delta",
-        "pr-link",
-    }
-)
+from .utils import parse_timestamp, scrub_surrogates
 
 
 @dataclass(slots=True)
@@ -76,7 +61,7 @@ def load_jsonl_file(
 
             # Skip known types we don't care about
             entry_type = data.get("type", "")
-            if entry_type in _SILENT_SKIP_TYPES:
+            if entry_type in SILENT_SKIP_TYPES:
                 continue
 
             # Parse into typed model

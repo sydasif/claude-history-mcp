@@ -20,7 +20,6 @@ from .models import (
     UserEntry,
     AssistantEntry,
 )
-from .utils import parse_timestamp
 
 
 def create_entry(data: dict[str, Any]) -> Any | None:
@@ -77,7 +76,7 @@ def create_entry(data: dict[str, Any]) -> Any | None:
         return None
 
 
-def extract_text(content: "list[Any] | None") -> str:
+def extract_text(content: list[Any] | None) -> str:
     """Extract all text content from a message's content blocks, including thinking and tool info.
 
     Args:
@@ -101,7 +100,7 @@ def extract_text(content: "list[Any] | None") -> str:
     return "\n".join(parts)
 
 
-def extract_tool_names(content: "list[Any] | None") -> list[str]:
+def extract_tool_names(content: list[Any] | None) -> list[str]:
     """Extract tool names from content blocks.
 
     Args:
@@ -115,7 +114,7 @@ def extract_tool_names(content: "list[Any] | None") -> list[str]:
     return [item.name for item in content if isinstance(item, ToolUseContent)]
 
 
-def extract_tool_result_text(content: "str | list[dict[str, Any]] | None") -> str:
+def extract_tool_result_text(content: str | list[dict[str, Any]] | None) -> str:
     """Normalize tool_result content to a string.
 
     Args:
@@ -181,5 +180,8 @@ def get_entry_tokens(entry: Any) -> tuple[int, int]:
     msg = getattr(entry, "message", None)
     usage = getattr(msg, "usage", None) if msg else None
     if usage:
-        return (getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
+        return (
+            getattr(usage, "input_tokens", 0) or 0,
+            getattr(usage, "output_tokens", 0) or 0,
+        )
     return (0, 0)

@@ -81,9 +81,3 @@ def _extract_display_name(jsonl_path: Path) -> str | None:
     except OSError:
         pass
     return None
-
-
-def get_history_file() -> Path | None:
-    """Find ~/.claude/history.jsonl."""
-    history = Path.home() / ".claude" / "history.jsonl"
-    return history if history.exists() else None

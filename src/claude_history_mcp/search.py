@@ -485,8 +485,6 @@ class SearchEngine:
         if format not in ("json", "csv"):
             return {"error": f"Invalid format: {format}. Use 'json' or 'csv'."}
 
-        project_id = self._resolve_project_id(project) if project else None
-
         if session_ids:
             # Fetch specific sessions
             all_sessions = []

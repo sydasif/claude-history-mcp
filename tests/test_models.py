@@ -4,24 +4,13 @@ from typing import Any, cast
 
 from claude_history_mcp.models import (
     AiTitleEntry,
-    AttachmentEntry,
-    BaseEntry,
-    ImageContent,
-    MessageResult,
     PassthroughEntry,
-    ProjectInfo,
-    QueueOperationEntry,
-    RecentActivityEntry,
-    SessionStats,
-    SessionSummary,
-    SessionTranscript,
     SummaryEntry,
     SystemEntry,
     TextContent,
     ThinkingContent,
     ToolResultContent,
     ToolUseContent,
-    UsageInfo,
     UserEntry,
     AssistantEntry,
     SILENT_SKIP_TYPES,
@@ -35,18 +24,26 @@ def test_text_content():
 
 
 def test_tool_use_content():
-    c = ToolUseContent.model_validate({"type": "tool_use", "id": "t1", "name": "Bash", "input": {"cmd": "ls"}})
+    c = ToolUseContent.model_validate(
+        {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"cmd": "ls"}}
+    )
     assert c.name == "Bash"
 
 
 def test_tool_result_content_string():
-    c = ToolResultContent.model_validate({"type": "tool_result", "tool_use_id": "t1", "content": "ok"})
+    c = ToolResultContent.model_validate(
+        {"type": "tool_result", "tool_use_id": "t1", "content": "ok"}
+    )
     assert c.content == "ok"
 
 
 def test_tool_result_content_list():
     c = ToolResultContent.model_validate(
-        {"type": "tool_result", "tool_use_id": "t1", "content": [{"type": "text", "text": "ok"}]}
+        {
+            "type": "tool_result",
+            "tool_use_id": "t1",
+            "content": [{"type": "text", "text": "ok"}],
+        }
     )
     assert isinstance(c.content, list)
 
@@ -62,14 +59,17 @@ def test_user_entry_mixed_content():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message=cast(Any, {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "hello"},
-                {"type": "tool_result", "tool_use_id": "t1", "content": "done"},
-            ],
-            "usage": None,
-        }),
+        message=cast(
+            Any,
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hello"},
+                    {"type": "tool_result", "tool_use_id": "t1", "content": "done"},
+                ],
+                "usage": None,
+            },
+        ),
     )
     assert len(entry.message.content) == 2
 
@@ -85,18 +85,21 @@ def test_assistant_entry_thinking_text_tool_use():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message=cast(Any, {
-            "id": "msg-1",
-            "type": "message",
-            "role": "assistant",
-            "content": [
-                {"type": "thinking", "thinking": "let me think"},
-                {"type": "text", "text": "here's the answer"},
-                {"type": "tool_use", "id": "t1", "name": "Read", "input": {}},
-            ],
-            "model": "claude-3",
-            "usage": None,
-        }),
+        message=cast(
+            Any,
+            {
+                "id": "msg-1",
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "let me think"},
+                    {"type": "text", "text": "here's the answer"},
+                    {"type": "tool_use", "id": "t1", "name": "Read", "input": {}},
+                ],
+                "model": "claude-3",
+                "usage": None,
+            },
+        ),
     )
     assert len(entry.message.content) == 3
 
@@ -145,14 +148,24 @@ def test_content_item_discriminated_union():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message=cast(Any, {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "t"},
-                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "..."}},
-            ],
-            "usage": None,
-        }),
+        message=cast(
+            Any,
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "t"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "...",
+                        },
+                    },
+                ],
+                "usage": None,
+            },
+        ),
     )
     assert len(entry.message.content) == 2
     types = {type(c).__name__ for c in entry.message.content}
@@ -199,7 +212,17 @@ def test_assistant_entry_error_true():
         cwd="/tmp",
         version="1.0",
         timestamp="2024-01-01T00:00:00Z",
-        message=cast(Any, {"id": "msg-1", "type": "message", "role": "assistant", "content": [], "model": "claude-3", "usage": None}),
+        message=cast(
+            Any,
+            {
+                "id": "msg-1",
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": "claude-3",
+                "usage": None,
+            },
+        ),
         requestId="req-1",
     )
     assert entry.requestId == "req-1"
