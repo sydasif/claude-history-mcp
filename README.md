@@ -6,7 +6,7 @@
 
 **Built-in memory for Claude Code** — search every conversation, every session, every project. Your complete development history, queryable in seconds.
 
-> **How it works:** Claude Code stores conversation data in `~/.claude/projects/**/*.jsonl`. Claude History MCP parses these files, caches them in SQLite, and exposes 11 MCP tools so Claude can search your full development history on demand.
+> **How it works:** Claude Code stores conversation data in `~/.claude/projects/**/*.jsonl`. Claude History MCP parses these files, caches them in SQLite, and exposes 15 MCP tools so Claude can search your full development history on demand.
 
 ---
 
@@ -31,8 +31,10 @@
 | **Full-text search**       | Search across all session messages, tool outputs, and history commands                               |
 | **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                           |
 | **Incremental parsing**    | Only reparses files that changed (mtime-based SQLite cache)                                          |
-| **11 MCP tools**           | Search, list, filter, and analyze sessions — with pagination on all list/search tools                |
+| **15 MCP tools**           | Search, list, filter, analyze, export — with pagination on all list/search tools                     |
 | **Cost analytics**         | Estimate token costs, usage trends, model breakdowns, and tool frequency                             |
+| **Session hierarchy**      | Tree view: projects → sessions → messages with glob pattern search                                   |
+| **Bulk export**            | Export sessions to JSON or CSV with optional full message content                                    |
 | **Zero config**            | Points at your existing `~/.claude/` data — no setup, no API keys, no cloud                          |
 | **Surrogate-safe**         | Handles real-world JSONL edge cases (missing timestamps, truncated tool names, surrogate characters) |
 
@@ -67,19 +69,23 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 ## What You Can Ask
 
-| Question                                            | Tool                  | Example                                                 |
-| --------------------------------------------------- | --------------------- | ------------------------------------------------------- |
-| "What did I work on last week?"                     | `get_recent_activity` | `get_recent_activity(hours=168)`                        |
-| "Find sessions about payment processing"            | `search_messages`     | `search_messages(query="payment", role="user")`         |
-| "Show me the session where I debugged the timeout"  | `get_session`         | `get_session(session_id="abc123...")`                   |
-| "How many tokens did that refactoring cost?"        | `get_session_stats`   | `get_session_stats(session_id="abc123...")`             |
-| "What commands did I run to deploy?"                | `search_history`      | `search_history(query="terraform apply")`               |
-| "List all my projects and their activity"           | `list_projects`       | `list_projects()`                                       |
-| "Sessions in the auth project from last month"      | `list_sessions`       | `list_sessions(project="auth", from_date="last month")` |
-| "What is my estimated token cost?"                  | `get_cost_estimate`   | `get_cost_estimate(project="auth")`                     |
-| "Show daily usage trends for the past week"         | `get_usage_trends`    | `get_usage_trends(days=7)`                              |
-| "What models am I using and how much do they cost?" | `get_model_usage`     | `get_model_usage()`                                     |
-| "Which tools do I use most frequently?"             | `get_tool_usage`      | `get_tool_usage()`                                      |
+| Question                                            | Tool                         | Example                                                 |
+| --------------------------------------------------- | ---------------------------- | ------------------------------------------------------- |
+| "What did I work on last week?"                     | `get_recent_activity`        | `get_recent_activity(hours=168)`                        |
+| "Find sessions about payment processing"            | `search_messages`            | `search_messages(query="payment", role="user")`         |
+| "Show me the session where I debugged the timeout"  | `get_session`                | `get_session(session_id="abc123...")`                   |
+| "How many tokens did that refactoring cost?"        | `get_session_stats`          | `get_session_stats(session_id="abc123...")`             |
+| "What commands did I run to deploy?"                | `search_history`             | `search_history(query="terraform apply")`               |
+| "List all my projects and their activity"           | `list_projects`              | `list_projects()`                                       |
+| "Sessions in the auth project from last month"      | `list_sessions`              | `list_sessions(project="auth", from_date="last month")` |
+| "What is my estimated token cost?"                  | `get_cost_estimate`          | `get_cost_estimate(project="auth")`                     |
+| "Show daily usage trends for the past week"         | `get_usage_trends`           | `get_usage_trends(days=7)`                              |
+| "What models am I using and how much do they cost?" | `get_model_usage`            | `get_model_usage()`                                     |
+| "Which tools do I use most frequently?"             | `get_tool_usage`             | `get_tool_usage()`                                      |
+| "Show me the project hierarchy tree"                | `get_project_tree`           | `get_project_tree(project="auth")`                      |
+| "Find sessions matching a pattern"                  | `search_sessions_by_pattern` | `search_sessions_by_pattern(pattern="2024-01-*")`       |
+| "Export my sessions to CSV"                         | `export_sessions`            | `export_sessions(format="csv", project="auth")`         |
+| "Get aggregated stats for a project"                | `get_project_stats`          | `get_project_stats(project="auth")`                     |
 
 All list/search tools support `offset` for cursor-based pagination.
 
@@ -92,7 +98,7 @@ All list/search tools support `offset` for cursor-based pagination.
 | **JSONL parser**   | Handles real-world edge cases: surrogate characters, missing timestamps, dual `sessionId`/`session_id`, truncated tool names, API errors |
 | **SQLite cache**   | Incremental mtime-based invalidation — only reparses changed files                                                                       |
 | **SearchEngine**   | Full-text search + natural language date parsing (`dateparser`) + prefix-based session ID matching                                       |
-| **FastMCP server** | 11 tools + 2 resources exposed via stdio transport                                                                                       |
+| **FastMCP server** | 15 tools + 2 resources exposed via stdio transport                                                                                       |
 
 ---
 

@@ -201,3 +201,61 @@ async def test_new_analytics_tools():
 
         res_tools = await client.call_tool("get_tool_usage", {})
         assert isinstance(res_tools.data, list)
+
+
+@pytest.mark.asyncio
+async def test_new_tree_and_export_tools():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        # Verify tools exist
+        tools = await client.list_tools()
+        tool_names = [t.name for t in tools]
+        for expected in [
+            "get_project_tree",
+            "search_sessions_by_pattern",
+            "export_sessions",
+            "get_project_stats",
+        ]:
+            assert expected in tool_names, f"Missing tool: {expected}"
+
+        # Test get_project_tree
+        res_tree = await client.call_tool("get_project_tree", {})
+        assert isinstance(res_tree.data, list)
+        if res_tree.data:
+            proj = res_tree.data[0]
+            assert "project_path" in proj
+            assert "sessions" in proj
+
+        # Test search_sessions_by_pattern
+        sessions = await client.call_tool("list_sessions", {"limit": 1})
+        sid = sessions.data[0]["session_id"]
+        pattern = sid[:8] + "*"
+        res_search = await client.call_tool(
+            "search_sessions_by_pattern", {"pattern": pattern}
+        )
+        assert isinstance(res_search.data, list)
+        assert len(res_search.data) >= 1
+
+        # Test export_sessions (JSON)
+        res_export = await client.call_tool(
+            "export_sessions", {"format": "json", "limit": 1}
+        )
+        assert isinstance(res_export.data, dict)
+        assert res_export.data.get("format") == "json"
+        assert "data" in res_export.data
+
+        # Test export_sessions (CSV)
+        res_export_csv = await client.call_tool(
+            "export_sessions", {"format": "csv", "limit": 1}
+        )
+        assert isinstance(res_export_csv.data, dict)
+        assert res_export_csv.data.get("format") == "csv"
+
+        # Test get_project_stats
+        projects = await client.call_tool("list_projects", {})
+        proj_name = projects.data[0]["display_name"]
+        res_stats = await client.call_tool("get_project_stats", {"project": proj_name})
+        assert isinstance(res_stats.data, dict)
+        assert "project_path" in res_stats.data
+        assert "session_count" in res_stats.data

@@ -396,6 +396,233 @@ class SearchEngine:
         project_id = self._resolve_project_id(project) if project else None
         return self.cache.get_tool_usage(project_id=project_id)
 
+    # --- Project Tree ---
+    def get_project_tree(
+        self, project: str | None = None, limit_sessions: int = 50
+    ) -> list[dict]:
+        """Get hierarchical project→session→message tree view.
+
+        Args:
+            project: Optional project filter (partial match on path or display name)
+            limit_sessions: Max sessions per project (default 50)
+
+        Returns:
+            List of projects with nested sessions and message summaries.
+        """
+        project_id = None
+        if project:
+            project_id = self._resolve_project_id(project)
+        return self.cache.get_project_tree(
+            project_id=project_id, limit_sessions=limit_sessions
+        )
+
+    # --- Session Search by Pattern (glob-style) ---
+    def search_sessions_by_pattern(
+        self,
+        pattern: str,
+        project: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Search sessions using glob-style pattern matching on session_id.
+
+        Args:
+            pattern: Glob pattern (e.g., "2024-01-*", "abc-*-def") or substring
+            project: Optional project filter
+            limit: Max results (default 50)
+            offset: Pagination offset (default 0)
+
+        Returns:
+            List of matching sessions with metadata.
+        """
+        import fnmatch
+
+        sessions = self.cache.get_sessions(limit=1000)
+        project_id = self._resolve_project_id(project) if project else None
+
+        if project_id:
+            projects = self.cache.get_all_projects()
+            project_path = next(
+                (p["project_path"] for p in projects if p["id"] == project_id), None
+            )
+            if project_path:
+                sessions = [
+                    s for s in sessions if s.get("project_path") == project_path
+                ]
+
+        matches = [s for s in sessions if fnmatch.fnmatch(s["session_id"], pattern)]
+
+        return matches[offset : offset + limit]
+
+    # --- Bulk Export Sessions ---
+    def export_sessions(
+        self,
+        project: str | None = None,
+        session_ids: list[str] | None = None,
+        format: str = "json",
+        include_messages: bool = True,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        limit: int = 100,
+    ) -> dict:
+        """Export sessions to JSON or CSV format.
+
+        Args:
+            project: Filter by project (partial match)
+            session_ids: Specific session IDs to export (overrides project filter)
+            format: "json" or "csv" (default "json")
+            include_messages: Include full message content (default True)
+            from_date: Filter sessions after this date
+            to_date: Filter sessions before this date
+            limit: Max sessions to export (default 100)
+
+        Returns:
+            Dict with "data" (export content), "count", and "format" keys.
+        """
+        import csv
+        import io
+
+        if format not in ("json", "csv"):
+            return {"error": f"Invalid format: {format}. Use 'json' or 'csv'."}
+
+        project_id = self._resolve_project_id(project) if project else None
+
+        if session_ids:
+            # Fetch specific sessions
+            all_sessions = []
+            for sid in session_ids[:limit]:
+                sess = self.cache.get_session(sid)
+                if sess:
+                    all_sessions.append(sess)
+        else:
+            # Use list_sessions with filters
+            all_sessions = self.list_sessions(
+                project=project,
+                from_date=from_date,
+                to_date=to_date,
+                limit=limit,
+            )
+
+        if include_messages:
+            for sess in all_sessions:
+                msg_result = self.get_session(sess["session_id"])
+                if msg_result and "messages" in msg_result:
+                    sess["messages"] = msg_result["messages"]
+
+        if format == "json":
+            return {
+                "format": "json",
+                "count": len(all_sessions),
+                "data": all_sessions,
+            }
+        else:
+            # CSV export
+            output = io.StringIO()
+            if all_sessions:
+                fieldnames = [
+                    "session_id",
+                    "project_path",
+                    "display_name",
+                    "first_timestamp",
+                    "last_timestamp",
+                    "message_count",
+                    "total_input_tokens",
+                    "total_output_tokens",
+                    "summary",
+                    "ai_title",
+                    "cwd",
+                ]
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                for sess in all_sessions:
+                    row = {k: sess.get(k, "") for k in fieldnames}
+                    writer.writerow(row)
+            return {
+                "format": "csv",
+                "count": len(all_sessions),
+                "data": output.getvalue(),
+            }
+
+    # --- Project Stats (aggregated) ---
+    def get_project_stats(self, project: str) -> dict | None:
+        """Get aggregated statistics for a project.
+
+        Args:
+            project: Project path or display name (partial match)
+
+        Returns:
+            Dict with aggregated stats or None if not found.
+        """
+        project_id = self._resolve_project_id(project)
+        if not project_id:
+            return None
+
+        conn = self.cache.connect()
+        # Aggregate from projects table
+        proj_row = conn.execute(
+            "SELECT * FROM projects WHERE id=?", (project_id,)
+        ).fetchone()
+        if not proj_row:
+            return None
+
+        proj = dict(proj_row)
+
+        # Session count
+        session_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM sessions WHERE project_id=?", (project_id,)
+        ).fetchone()["cnt"]
+
+        # Date range from sessions
+        date_range = conn.execute(
+            "SELECT MIN(first_timestamp) as first_ts, MAX(last_timestamp) as last_ts "
+            "FROM sessions WHERE project_id=?",
+            (project_id,),
+        ).fetchone()
+
+        # Total tokens across all sessions
+        token_sums = conn.execute(
+            "SELECT COALESCE(SUM(total_input_tokens),0) as total_in, "
+            "COALESCE(SUM(total_output_tokens),0) as total_out "
+            "FROM sessions WHERE project_id=?",
+            (project_id,),
+        ).fetchone()
+
+        # Unique models used
+        models = conn.execute(
+            "SELECT DISTINCT model FROM messages WHERE project_id=? AND model IS NOT NULL",
+            (project_id,),
+        ).fetchall()
+
+        # Top tools
+        tool_rows = conn.execute(
+            "SELECT tool_names FROM messages WHERE project_id=? AND tool_names IS NOT NULL AND tool_names != '[]'",
+            (project_id,),
+        ).fetchall()
+        tool_counts: dict[str, int] = {}
+        for r in tool_rows:
+            try:
+                tools = json.loads(r["tool_names"])
+                for t in tools:
+                    tool_counts[t] = tool_counts.get(t, 0) + 1
+            except Exception:
+                pass
+
+        top_tools = sorted(tool_counts.items(), key=lambda x: -x[1])[:10]
+
+        return {
+            "project_path": proj.get("project_path"),
+            "display_name": proj.get("display_name"),
+            "session_count": session_count,
+            "total_messages": proj.get("total_messages", 0),
+            "total_input_tokens": token_sums["total_in"] if token_sums else 0,
+            "total_output_tokens": token_sums["total_out"] if token_sums else 0,
+            "first_session": date_range["first_ts"] if date_range else None,
+            "last_session": date_range["last_ts"] if date_range else None,
+            "unique_models": [m["model"] for m in models],
+            "top_tools": [{"tool": k, "count": v} for k, v in top_tools],
+            "estimated_cost_usd": 0.0,  # Could calculate from cache.get_cost_data
+        }
+
     def _parse_natural_date(
         self, date_str: str, start_of_day: bool = False, end_of_day: bool = False
     ) -> datetime | None:

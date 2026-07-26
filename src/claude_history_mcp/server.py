@@ -308,6 +308,103 @@ def get_tool_usage(
         return [{"error": str(e)}]
 
 
+@mcp.tool
+def get_project_tree(
+    project: str | None = None,
+    limit_sessions: int = 50,
+) -> list[dict[str, Any]]:
+    """Get hierarchical project tree: projects → sessions → message summaries.
+
+    Args:
+        project: Filter by project path or name (partial match)
+        limit_sessions: Max sessions per project (default 50)
+    """
+    try:
+        engine = _get_engine()
+        return engine.get_project_tree(project=project, limit_sessions=limit_sessions)
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def search_sessions_by_pattern(
+    pattern: str,
+    project: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Search sessions using glob-style pattern matching on session_id.
+
+    Args:
+        pattern: Glob pattern (e.g., "2024-01-*", "abc-*-def") or substring
+        project: Filter by project path or name
+        limit: Maximum results (default 50)
+        offset: Pagination offset (default 0)
+    """
+    try:
+        engine = _get_engine()
+        return engine.search_sessions_by_pattern(
+            pattern=pattern, project=project, limit=limit, offset=offset
+        )
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def export_sessions(
+    project: str | None = None,
+    session_ids: list[str] | None = None,
+    format: str = "json",
+    include_messages: bool = True,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Export sessions to JSON or CSV format.
+
+    Args:
+        project: Filter by project path or name
+        session_ids: Specific session IDs to export (overrides project filter)
+        format: "json" or "csv" (default "json")
+        include_messages: Include full message content (default true)
+        from_date: Filter sessions after this date
+        to_date: Filter sessions before this date
+        limit: Maximum sessions to export (default 100)
+    """
+    try:
+        engine = _get_engine()
+        return engine.export_sessions(
+            project=project,
+            session_ids=session_ids,
+            format=format,
+            include_messages=include_messages,
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+        )
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def get_project_stats(
+    project: str,
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get aggregated statistics for a project.
+
+    Args:
+        project: Project path or display name (partial match)
+    """
+    try:
+        engine = _get_engine()
+        result = engine.get_project_stats(project=project)
+        if result is None:
+            return {"error": f"Project not found: {project}"}
+        return result
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
 @mcp.resource("claude://projects")
 def get_projects_resource() -> str:
     """List of all Claude Code projects."""

@@ -548,3 +548,66 @@ class CacheManager:
             sql += " AND session_id=?"
             params.append(session_id)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    # --- Project Tree ---
+    def get_project_tree(
+        self, project_id: int | None = None, limit_sessions: int = 50
+    ) -> list[dict]:
+        """Get hierarchical project tree: project → sessions → message summaries.
+
+        Args:
+            project_id: Optional project filter. If None, returns all projects.
+            limit_sessions: Max sessions per project (default 50).
+
+        Returns:
+            List of projects, each with nested sessions and message summaries.
+        """
+        conn = self.connect()
+        if project_id:
+            project_rows = conn.execute(
+                "SELECT * FROM projects WHERE id=? ORDER BY last_updated DESC",
+                (project_id,),
+            ).fetchall()
+        else:
+            project_rows = conn.execute(
+                "SELECT * FROM projects ORDER BY last_updated DESC"
+            ).fetchall()
+
+        result = []
+        for p in project_rows:
+            p_dict = dict(p)
+            # Get sessions for this project
+            session_rows = conn.execute(
+                "SELECT * FROM sessions WHERE project_id=? ORDER BY last_timestamp DESC LIMIT ?",
+                (p_dict["id"], limit_sessions),
+            ).fetchall()
+
+            sessions_list = []
+            for s in session_rows:
+                s_dict = dict(s)
+                # Get message summary for this session
+                msg_rows = conn.execute(
+                    "SELECT entry_type, COUNT(*) as count, "
+                    "COALESCE(SUM(tokens_input), 0) as input_tokens, "
+                    "COALESCE(SUM(tokens_output), 0) as output_tokens, "
+                    "MIN(timestamp) as first_msg, MAX(timestamp) as last_msg "
+                    "FROM messages WHERE session_id=? AND project_id=? GROUP BY entry_type",
+                    (s_dict["session_id"], p_dict["id"]),
+                ).fetchall()
+
+                session_summary = {
+                    "session_id": s_dict["session_id"],
+                    "summary": s_dict.get("summary"),
+                    "ai_title": s_dict.get("ai_title"),
+                    "first_timestamp": s_dict.get("first_timestamp"),
+                    "last_timestamp": s_dict.get("last_timestamp"),
+                    "message_count": s_dict.get("message_count", 0),
+                    "total_input_tokens": s_dict.get("total_input_tokens", 0),
+                    "total_output_tokens": s_dict.get("total_output_tokens", 0),
+                    "message_breakdown": [dict(r) for r in msg_rows],
+                }
+                sessions_list.append(session_summary)
+
+            p_dict["sessions"] = sessions_list
+            result.append(p_dict)
+        return result

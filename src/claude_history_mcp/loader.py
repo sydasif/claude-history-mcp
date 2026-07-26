@@ -3,7 +3,6 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from .cache import CacheManager as OurCacheManager
 from .discovery import discover_projects, _extract_display_name
@@ -62,6 +61,7 @@ def load_jsonl_file(
     last_timestamp = None
     cwd = None
     summary = None
+    ai_title = None
 
     with file_path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -103,6 +103,10 @@ def load_jsonl_file(
             if entry.type == "summary":
                 summary = getattr(entry, "summary", None)
 
+            # Extract ai-title (keep the latest one)
+            if entry.type == "ai-title":
+                ai_title = getattr(entry, "aiTitle", None)
+
             # Extract first user message
             msg = getattr(entry, "message", None)
             if entry.type == "user" and msg and not first_user_message:
@@ -133,7 +137,10 @@ def load_jsonl_file(
 
             # Serialize entry to JSON
             try:
-                raw_json = json.dumps(entry.model_dump() if hasattr(entry, "model_dump") else str(entry), ensure_ascii=False)
+                raw_json = json.dumps(
+                    entry.model_dump() if hasattr(entry, "model_dump") else str(entry),
+                    ensure_ascii=False,
+                )
             except Exception:
                 raw_json = str(entry)
 
@@ -155,7 +162,9 @@ def load_jsonl_file(
             )
 
             if len(parsed_entries) >= 500:
-                cache.insert_messages(project_id, session_id, file_path.name, parsed_entries)
+                cache.insert_messages(
+                    project_id, session_id, file_path.name, parsed_entries
+                )
                 parsed_entries.clear()
 
     # Store remaining in our cache
@@ -167,7 +176,7 @@ def load_jsonl_file(
         project_id,
         session_id,
         summary=summary,
-        ai_title=None,  # We don't have ai-title yet
+        ai_title=ai_title,
         first_timestamp=first_timestamp.isoformat() if first_timestamp else None,
         last_timestamp=last_timestamp.isoformat() if last_timestamp else None,
         message_count=message_count,
