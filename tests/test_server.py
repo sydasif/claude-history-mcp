@@ -214,7 +214,6 @@ async def test_new_tree_and_export_tools():
         for expected in [
             "get_project_tree",
             "search_sessions_by_pattern",
-            "export_sessions",
             "get_project_stats",
         ]:
             assert expected in tool_names, f"Missing tool: {expected}"
@@ -236,21 +235,6 @@ async def test_new_tree_and_export_tools():
         )
         assert isinstance(res_search.data, list)
         assert len(res_search.data) >= 1
-
-        # Test export_sessions (JSON)
-        res_export = await client.call_tool(
-            "export_sessions", {"format": "json", "limit": 1}
-        )
-        assert isinstance(res_export.data, dict)
-        assert res_export.data.get("format") == "json"
-        assert "data" in res_export.data
-
-        # Test export_sessions (CSV)
-        res_export_csv = await client.call_tool(
-            "export_sessions", {"format": "csv", "limit": 1}
-        )
-        assert isinstance(res_export_csv.data, dict)
-        assert res_export_csv.data.get("format") == "csv"
 
         # Test get_project_stats
         projects = await client.call_tool("list_projects", {})

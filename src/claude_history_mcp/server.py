@@ -351,42 +351,6 @@ def search_sessions_by_pattern(
 
 
 @mcp.tool
-def export_sessions(
-    project: str | None = None,
-    session_ids: list[str] | None = None,
-    format: str = "json",
-    include_messages: bool = True,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    limit: int = 100,
-) -> dict[str, Any]:
-    """Export sessions to JSON or CSV format.
-
-    Args:
-        project: Filter by project path or name
-        session_ids: Specific session IDs to export (overrides project filter)
-        format: "json" or "csv" (default "json")
-        include_messages: Include full message content (default true)
-        from_date: Filter sessions after this date
-        to_date: Filter sessions before this date
-        limit: Maximum sessions to export (default 100)
-    """
-    try:
-        engine = _get_engine()
-        return engine.export_sessions(
-            project=project,
-            session_ids=session_ids,
-            format=format,
-            include_messages=include_messages,
-            from_date=from_date,
-            to_date=to_date,
-            limit=limit,
-        )
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool
 def get_project_stats(
     project: str,
 ) -> dict[str, Any] | list[dict[str, Any]]:

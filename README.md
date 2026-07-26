@@ -31,10 +31,9 @@
 | **Full-text search**       | Search across all session messages, tool outputs, and history commands                               |
 | **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                           |
 | **Incremental parsing**    | Only reparses files that changed (mtime-based SQLite cache)                                          |
-| **15 MCP tools**           | Search, list, filter, analyze, export — with pagination on all list/search tools                     |
+| **14 MCP tools**           | Search, list, filter, analyze — with pagination on all list/search tools                             |
 | **Cost analytics**         | Estimate token costs, usage trends, model breakdowns, and tool frequency                             |
 | **Session hierarchy**      | Tree view: projects → sessions → messages with glob pattern search                                   |
-| **Bulk export**            | Export sessions to JSON or CSV with optional full message content                                    |
 | **Zero config**            | Points at your existing `~/.claude/` data — no setup, no API keys, no cloud                          |
 | **Surrogate-safe**         | Handles real-world JSONL edge cases (missing timestamps, truncated tool names, surrogate characters) |
 
@@ -84,7 +83,6 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 | "Which tools do I use most frequently?"             | `get_tool_usage`             | `get_tool_usage()`                                      |
 | "Show me the project hierarchy tree"                | `get_project_tree`           | `get_project_tree(project="auth")`                      |
 | "Find sessions matching a pattern"                  | `search_sessions_by_pattern` | `search_sessions_by_pattern(pattern="2024-01-*")`       |
-| "Export my sessions to CSV"                         | `export_sessions`            | `export_sessions(format="csv", project="auth")`         |
 | "Get aggregated stats for a project"                | `get_project_stats`          | `get_project_stats(project="auth")`                     |
 
 All list/search tools support `offset` for cursor-based pagination.
@@ -98,7 +96,7 @@ All list/search tools support `offset` for cursor-based pagination.
 | **JSONL parser**   | Handles real-world edge cases: surrogate characters, missing timestamps, dual `sessionId`/`session_id`, truncated tool names, API errors |
 | **SQLite cache**   | Incremental mtime-based invalidation — only reparses changed files                                                                       |
 | **SearchEngine**   | Full-text search + natural language date parsing (`dateparser`) + prefix-based session ID matching                                       |
-| **FastMCP server** | 15 tools + 2 resources exposed via stdio transport                                                                                       |
+| **FastMCP server** | 14 tools + 2 resources exposed via stdio transport                                                                                       |
 
 ---
 
