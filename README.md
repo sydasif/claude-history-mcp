@@ -1,26 +1,12 @@
-# Claude History MCP
+# Claude History
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-brightgreen.svg)](https://www.python.org/downloads/)
 [![GitHub stars](https://img.shields.io/github/stars/sydasif/claude-history-mcp?style=social)](https://github.com/sydasif/claude-history-mcp)
 
-**Built-in memory for Claude Code** — search every conversation, every session, every project. Your complete development history, queryable in seconds.
+**Built-in memory search `MCP` for `Claude`** — search every conversation, every session, every project. Your complete development history, queryable in seconds.
 
-> **How it works:** Claude Code stores conversation data in `~/.claude/projects/**/*.jsonl`. Claude History MCP parses these files, caches them in SQLite, and exposes 15 MCP tools so Claude can search your full development history on demand.
-
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [What You Can Ask](#what-you-can-ask)
-- [Under the Hood](#under-the-hood)
-- [Architecture](#architecture)
-- [Development](#development)
-- [FAQ](#faq)
-- [Contributing](#contributing)
-- [License](#license)
+> **How it works:** Claude Code stores conversation data in `~/.claude/projects/**/*.jsonl`. Claude History MCP parses these files, caches them in SQLite, and exposes tools so Claude can search your full development history on demand.
 
 ---
 
@@ -30,7 +16,7 @@
 | -------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **Full-text search**       | Search across all session messages, tool outputs, and history commands                               |
 | **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                           |
-| **Incremental parsing**    | Only reparses files that changed (mtime-based SQLite cache)                                          |
+| **Incremental parsing**    | Only re-parses files that changed (mtime-based SQLite cache)                                         |
 | **10 MCP tools**           | Search, list, filter, analyze — with pagination on all list/search tools                             |
 | **Cost analytics**         | Estimate token costs, usage trends, model breakdowns, and tool frequency                             |
 | **Session hierarchy**      | Tree view: projects → sessions → messages with glob pattern search                                   |
@@ -49,20 +35,6 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 ```
 
 **That's it.** Next time you open Claude Code, you have a searchable memory.
-
-<details>
-<summary><strong>Or install from source</strong></summary>
-
-```bash
-git clone https://github.com/sydasif/claude-history-mcp
-cd claude-history-mcp
-uv sync
-
-# Add to Claude Code
-claude mcp add claude-history --scope user -- uvx --from git+https://github.com/sydasif/claude-history-mcp claude-history-mcp
-```
-
-</details>
 
 ---
 
@@ -86,20 +58,9 @@ All list/search tools support `offset` for cursor-based pagination.
 
 ---
 
-## Under the Hood
-
-| Component          | Purpose                                                                                                                                  |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **JSONL parser**   | Handles real-world edge cases: surrogate characters, missing timestamps, dual `sessionId`/`session_id`, truncated tool names, API errors |
-| **SQLite cache**   | Incremental mtime-based invalidation — only reparses changed files                                                                       |
-| **SearchEngine**   | Full-text search + natural language date parsing (`dateparser`) + prefix-based session ID matching                                       |
-| **FastMCP server** | 10 tools + 2 resources exposed via stdio transport                                                                                       |
-
----
-
 ## Architecture
 
-```
+```text
 ~/.claude/projects/**/*.jsonl  ──┐
 ~/.claude/history.jsonl        ──┤
                                   ▼
@@ -111,11 +72,11 @@ All list/search tools support `offset` for cursor-based pagination.
 │  │  list,      │  │  history)  │  │  filters,     │  │
 │  │  get, stats)│  │            │  │  aggregation) │  │
 │  └──────┬──────┘  └─────┬──────┘  └───────┬───────┘  │
-│         │               │                  │           │
-│  ┌──────┴───────────────┴──────────────────┴───────┐  │
-│  │              SQLite Cache Layer                 │  │
-│  │  projects │ sessions │ messages │ history       │  │
-│  └─────────────────────────────────────────────────┘  │
+│         │               │                  │         │
+│  ┌──────┴───────────────┴──────────────────┴───────┐ │
+│  │              SQLite Cache Layer                 │ │
+│  │  projects │ sessions │ messages │ history       │ │
+│  └─────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -134,25 +95,6 @@ uv run pytest -v
 uv run pytest --cov=claude_history_mcp
 
 # Clear and rebuild cache
-python -c "from claude_history_mcp import initialize; initialize(force=True)"
-```
-
----
-
-## FAQ
-
-**Does this access or send my Claude conversations anywhere?**
-No. It reads files from your local `~/.claude/` directory and caches them in a local SQLite database. Nothing is sent externally.
-
-**What data does it store?**
-A SQLite cache file in the project directory. It mirrors your `~/.claude/` JSONL files for fast querying. You can delete it at any time — it rebuilds on next startup.
-
-**Can I use this without Claude Code?**
-No. It's an MCP server designed to be used with Claude Code. It gives Claude Code the ability to search your own conversation history.
-
-**The cache seems stale — how do I force a rebuild?**
-
-```bash
 python -c "from claude_history_mcp import initialize; initialize(force=True)"
 ```
 
