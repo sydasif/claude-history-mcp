@@ -12,14 +12,14 @@ __all__ = ["get_cache_path", "initialize", "CacheManager", "SearchEngine"]
 
 def get_cache_path() -> Path:
     """Return path to the SQLite cache database."""
-    return Path.home() / ".claude" / "claude-history.db"
+    return Path.home() / ".claude" / "history.db"
 
 
 def initialize(force: bool = False) -> SearchEngine:
     """Initialize the cache and return a ready SearchEngine.
 
     Loads all JSONL files from ~/.claude/projects/ and ~/.claude/history.jsonl
-    into a SQLite cache at ~/.claude/claude-history.db. Unchanged session
+    into a SQLite cache at ~/.claude/history.db. Unchanged session
     files are skipped on subsequent calls (see loader.load_project); the
     global history.jsonl is always re-scanned but inserts are de-duplicated
     at the cache layer.

@@ -72,12 +72,12 @@ def get_history_file() -> Path | None:
 
 
 # Model pricing per 1M tokens (input, output) in USD
+# Source: https://platform.claude.com/docs/en/about-claude/pricing
+# Last verified: 2026-07-27
 MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4": (15.0, 75.0),
-    "claude-sonnet-5": (3.0, 15.0),
-    "claude-sonnet-4": (3.0, 15.0),
-    "claude-haiku-4": (0.25, 1.25),
-    "claude-haiku-4.5": (0.25, 1.25),
+    "claude-opus-4.8": (5.0, 25.0),
+    "claude-sonnet-5": (2.0, 10.0),  # Introductory pricing through Aug 31, 2026
+    "claude-haiku-4.5": (1.0, 5.0),
 }
 
 DEFAULT_PRICING = (3.0, 15.0)  # Default to Sonnet pricing

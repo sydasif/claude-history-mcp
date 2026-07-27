@@ -68,22 +68,19 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 ## What You Can Ask
 
-| Question                                            | Tool                         | Example                                                 |
-| --------------------------------------------------- | ---------------------------- | ------------------------------------------------------- |
-| "What did I work on last week?"                     | `get_recent_activity`        | `get_recent_activity(hours=168)`                        |
-| "Find sessions about payment processing"            | `search_messages`            | `search_messages(query="payment", role="user")`         |
-| "Show me the session where I debugged the timeout"  | `get_session`                | `get_session(session_id="abc123...")`                   |
-| "How many tokens did that refactoring cost?"        | `get_session_stats`          | `get_session_stats(session_id="abc123...")`             |
-| "What commands did I run to deploy?"                | `search_history`             | `search_history(query="terraform apply")`               |
-| "List all my projects and their activity"           | `list_projects`              | `list_projects()`                                       |
-| "Sessions in the auth project from last month"      | `list_sessions`              | `list_sessions(project="auth", from_date="last month")` |
-| "What is my estimated token cost?"                  | `get_cost_estimate`          | `get_cost_estimate(project="auth")`                     |
-| "Show daily usage trends for the past week"         | `get_usage_trends`           | `get_usage_trends(days=7)`                              |
-| "What models am I using and how much do they cost?" | `get_model_usage`            | `get_model_usage()`                                     |
-| "Which tools do I use most frequently?"             | `get_tool_usage`             | `get_tool_usage()`                                      |
-| "Show me the project hierarchy tree"                | `get_project_tree`           | `get_project_tree(project="auth")`                      |
-| "Find sessions matching a pattern"                  | `search_sessions_by_pattern` | `search_sessions_by_pattern(pattern="2024-01-*")`       |
-| "Get aggregated stats for a project"                | `get_project_stats`          | `get_project_stats(project="auth")`                     |
+| Question                                            | Tool                      | Example                                                       |
+| --------------------------------------------------- | ------------------------- | ------------------------------------------------------------- |
+| "What did I work on last week?"                     | `list_recent_activity`    | `list_recent_activity(hours=168)`                             |
+| "Find sessions about payment processing"            | `search_messages`         | `search_messages(query="payment", role="user")`               |
+| "Show me the session where I debugged the timeout"  | `list_session_transcript` | `list_session_transcript(session_id="abc123...")`             |
+| "How many tokens did that refactoring cost?"        | `list_session_stats`      | `list_session_stats(session_id="abc123...")`                  |
+| "What commands did I run to deploy?"                | `search_history`          | `search_history(query="terraform apply")`                     |
+| "List all my projects and their activity"           | `list_sessions_stats`     | `list_sessions_stats()`                                       |
+| "Sessions in the auth project from last month"      | `list_sessions_stats`     | `list_sessions_stats(project="auth", from_date="last month")` |
+| "What models am I using and how much do they cost?" | `list_model_usage`        | `list_model_usage()`                                          |
+| "Which tools do I use most frequently?"             | `list_tool_usage`         | `list_tool_usage()`                                           |
+| "Show me the project hierarchy tree"                | `list_project_tree`       | `list_project_tree(project="auth")`                           |
+| "Get aggregated stats for a project"                | `list_project_stats`      | `list_project_stats(project="auth")`                          |
 
 All list/search tools support `offset` for cursor-based pagination.
 
@@ -96,7 +93,7 @@ All list/search tools support `offset` for cursor-based pagination.
 | **JSONL parser**   | Handles real-world edge cases: surrogate characters, missing timestamps, dual `sessionId`/`session_id`, truncated tool names, API errors |
 | **SQLite cache**   | Incremental mtime-based invalidation — only reparses changed files                                                                       |
 | **SearchEngine**   | Full-text search + natural language date parsing (`dateparser`) + prefix-based session ID matching                                       |
-| **FastMCP server** | 14 tools + 2 resources exposed via stdio transport                                                                                       |
+| **FastMCP server** | 10 tools + 2 resources exposed via stdio transport                                                                                       |
 
 ---
 

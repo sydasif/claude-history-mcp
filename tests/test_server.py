@@ -82,7 +82,7 @@ async def test_list_sessions():
     from claude_history_mcp.server import mcp
 
     async with Client(mcp) as client:
-        result = await client.call_tool("list_sessions", {"limit": 5})
+        result = await client.call_tool("list_sessions_stats", {"limit": 5})
         assert len(result.data) == 1
 
 
@@ -102,9 +102,9 @@ async def test_get_session_stats():
     from claude_history_mcp.server import mcp
 
     async with Client(mcp) as client:
-        sessions = await client.call_tool("list_sessions", {"limit": 1})
+        sessions = await client.call_tool("list_sessions_stats", {"limit": 1})
         sid = sessions.data[0]["session_id"]
-        result = await client.call_tool("get_session_stats", {"session_id": sid})
+        result = await client.call_tool("list_session_stats", {"session_id": sid})
         # Just verify it returns valid stats structure
         assert "message_count" in result.data
         assert "total_input_tokens" in result.data
@@ -128,7 +128,7 @@ async def test_get_recent_activity():
     from claude_history_mcp.server import mcp
 
     async with Client(mcp) as client:
-        result = await client.call_tool("get_recent_activity", {"hours": 48})
+        result = await client.call_tool("list_recent_activity", {"hours": 48})
         assert isinstance(result.data, list)
 
 
@@ -140,12 +140,12 @@ async def test_server_has_expected_tools():
         tools = await client.list_tools()
         tool_names = [t.name for t in tools]
         expected = [
-            "list_sessions",
+            "list_sessions_stats",
             "search_messages",
-            "get_session",
-            "get_session_stats",
+            "list_session_transcript",
+            "list_session_stats",
             "search_history",
-            "get_recent_activity",
+            "list_recent_activity",
         ]
         for name in expected:
             assert name in tool_names, f"Missing tool: {name}"
@@ -171,21 +171,23 @@ async def test_new_analytics_tools():
         tools = await client.list_tools()
         tool_names = [t.name for t in tools]
         for expected in [
-            "get_model_usage",
-            "get_tool_usage",
+            "list_model_usage",
+            "list_tool_usage",
         ]:
             assert expected in tool_names
 
         # Call them
-        res_models = await client.call_tool("get_model_usage", {})
+        res_models = await client.call_tool("list_model_usage", {})
         assert isinstance(res_models.data, list)
 
-        res_totals = await client.call_tool("get_model_usage", {"include_totals": True})
+        res_totals = await client.call_tool(
+            "list_model_usage", {"include_totals": True}
+        )
         assert isinstance(res_totals.data, dict)
         assert "breakdown" in res_totals.data
         assert "total_cost_usd" in res_totals.data
 
-        res_tools = await client.call_tool("get_tool_usage", {})
+        res_tools = await client.call_tool("list_tool_usage", {})
         assert isinstance(res_tools.data, list)
 
 
@@ -198,22 +200,22 @@ async def test_new_tree_and_export_tools():
         tools = await client.list_tools()
         tool_names = [t.name for t in tools]
         for expected in [
-            "get_project_tree",
-            "get_project_stats",
+            "list_project_tree",
+            "list_project_stats",
         ]:
             assert expected in tool_names, f"Missing tool: {expected}"
 
-        # Test get_project_tree
-        res_tree = await client.call_tool("get_project_tree", {})
+        # Test list_project_tree
+        res_tree = await client.call_tool("list_project_tree", {})
         assert isinstance(res_tree.data, list)
         if res_tree.data:
             proj = res_tree.data[0]
             assert "project_path" in proj
             assert "sessions" in proj
 
-        # Test get_project_stats
+        # Test list_project_stats
         proj_name = res_tree.data[0]["display_name"]
-        res_stats = await client.call_tool("get_project_stats", {"project": proj_name})
+        res_stats = await client.call_tool("list_project_stats", {"project": proj_name})
         assert isinstance(res_stats.data, dict)
         assert "project_path" in res_stats.data
         assert "session_count" in res_stats.data

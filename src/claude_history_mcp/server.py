@@ -32,7 +32,30 @@ def _get_engine() -> SearchEngine:
 
 
 @mcp.tool
-def list_sessions(
+def list_project_stats(
+    project: str,
+    detail_level: str = "full",
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Get aggregated statistics for a project.
+
+    Args:
+        project: Project path or display name (partial match)
+        detail_level: "basic" or "full".
+            - "basic": Returns only fields matching list_projects (default)
+            - "full": Returns all stats including session_count, unique_models, top_tools, etc.
+    """
+    try:
+        engine = _get_engine()
+        result = engine.get_project_stats(project=project, detail_level=detail_level)
+        if result is None:
+            return {"error": f"Project not found: {project}"}
+        return result
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def list_sessions_stats(
     project: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
@@ -51,6 +74,124 @@ def list_sessions(
     try:
         engine = _get_engine()
         return engine.list_sessions(
+            project=project,
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def list_project_tree(
+    project: str | None = None,
+    limit_sessions: int = 50,
+) -> list[dict[str, Any]]:
+    """Get hierarchical project tree: projects -> sessions -> message summaries.
+
+    Args:
+        project: Filter by project path or name (partial match)
+        limit_sessions: Max sessions per project (default 50)
+    """
+    try:
+        engine = _get_engine()
+        return engine.get_project_tree(project=project, limit_sessions=limit_sessions)
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool
+def list_session_transcript(
+    session_id: str,
+    include_thinking: bool = False,
+) -> dict[str, Any]:
+    """Get full conversation transcript for a session.
+
+    Returns the complete message history including user prompts,
+    assistant responses, tool calls, and tool results.
+
+    Args:
+        session_id: Session ID (full or prefix, minimum 8 characters)
+        include_thinking: Whether to include thinking blocks (default false)
+    """
+    try:
+        if len(session_id) < 8:
+            return {"error": "session_id must be at least 8 characters"}
+        engine = _get_engine()
+        result = engine.get_session(session_id)
+        if result is None:
+            return {"error": f"Session not found: {session_id}"}
+        # Handle ambiguous prefix match
+        if isinstance(result, dict) and result.get("error") == "ambiguous_prefix":
+            candidates = result["candidates"]
+            return {
+                "error": f"Multiple sessions match prefix '{session_id}'. Use more characters:",
+                "candidates": candidates,
+            }
+        # Filter thinking blocks if requested
+        if not include_thinking and "messages" in result:
+            for msg in result["messages"]:
+                if msg.get("entry_type") == "assistant":
+                    try:
+                        raw = json.loads(msg["raw_json"])
+                        content = raw.get("message", {}).get("content", [])
+                        filtered = [c for c in content if c.get("type") != "thinking"]
+                        raw["message"]["content"] = filtered
+                        msg["raw_json"] = json.dumps(raw, ensure_ascii=False)
+                    except Exception:
+                        logger.exception("Failed to filter thinking blocks")
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def list_session_stats(session_id: str) -> dict[str, Any]:
+    """Get token usage, tool call counts, and duration for a session.
+
+    Args:
+        session_id: Session ID (full or prefix, minimum 8 characters)
+    """
+    try:
+        if len(session_id) < 8:
+            return {"error": "session_id must be at least 8 characters"}
+        engine = _get_engine()
+        result = engine.get_session_stats(session_id)
+        if result is None:
+            return {"error": f"Session not found: {session_id}"}
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def search_history(
+    query: str,
+    project: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Search Claude Code command history (what you typed).
+
+    Searches the global history.jsonl file containing all commands
+    entered across all sessions.
+
+    Args:
+        query: Search term (case-insensitive)
+        project: Filter by project path
+        from_date: Filter after this date
+        to_date: Filter before this date
+        limit: Maximum results (default 50)
+        offset: Number of results to skip for pagination (default 0)
+    """
+    try:
+        engine = _get_engine()
+        return engine.search_history(
+            query=query,
             project=project,
             from_date=from_date,
             to_date=to_date,
@@ -107,107 +248,7 @@ def search_messages(
 
 
 @mcp.tool
-def get_session(
-    session_id: str,
-    include_thinking: bool = False,
-) -> dict[str, Any]:
-    """Get full conversation transcript for a session.
-
-    Returns the complete message history including user prompts,
-    assistant responses, tool calls, and tool results.
-
-    Args:
-        session_id: Session ID (full or prefix, minimum 8 characters)
-        include_thinking: Whether to include thinking blocks (default false)
-    """
-    try:
-        if len(session_id) < 8:
-            return {"error": "session_id must be at least 8 characters"}
-        engine = _get_engine()
-        result = engine.get_session(session_id)
-        if result is None:
-            return {"error": f"Session not found: {session_id}"}
-        # Handle ambiguous prefix match
-        if isinstance(result, dict) and result.get("error") == "ambiguous_prefix":
-            candidates = result["candidates"]
-            return {
-                "error": f"Multiple sessions match prefix '{session_id}'. Use more characters:",
-                "candidates": candidates,
-            }
-        # Filter thinking blocks if requested
-        if not include_thinking and "messages" in result:
-            for msg in result["messages"]:
-                if msg.get("entry_type") == "assistant":
-                    try:
-                        raw = json.loads(msg["raw_json"])
-                        content = raw.get("message", {}).get("content", [])
-                        filtered = [c for c in content if c.get("type") != "thinking"]
-                        raw["message"]["content"] = filtered
-                        msg["raw_json"] = json.dumps(raw, ensure_ascii=False)
-                    except Exception:
-                        logger.exception("Failed to filter thinking blocks")
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool
-def get_session_stats(session_id: str) -> dict[str, Any]:
-    """Get token usage, tool call counts, and duration for a session.
-
-    Args:
-        session_id: Session ID (full or prefix, minimum 8 characters)
-    """
-    try:
-        if len(session_id) < 8:
-            return {"error": "session_id must be at least 8 characters"}
-        engine = _get_engine()
-        result = engine.get_session_stats(session_id)
-        if result is None:
-            return {"error": f"Session not found: {session_id}"}
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@mcp.tool
-def search_history(
-    query: str,
-    project: str | None = None,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[dict[str, Any]]:
-    """Search Claude Code command history (what you typed).
-
-    Searches the global history.jsonl file containing all commands
-    entered across all sessions.
-
-    Args:
-        query: Search term (case-insensitive)
-        project: Filter by project path
-        from_date: Filter after this date
-        to_date: Filter before this date
-        limit: Maximum results (default 50)
-        offset: Number of results to skip for pagination (default 0)
-    """
-    try:
-        engine = _get_engine()
-        return engine.search_history(
-            query=query,
-            project=project,
-            from_date=from_date,
-            to_date=to_date,
-            limit=limit,
-            offset=offset,
-        )
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
-def get_recent_activity(
+def list_recent_activity(
     hours: int = 24, limit: int = 100, offset: int = 0
 ) -> list[dict[str, Any]]:
     """Get recent Claude Code activity across all projects.
@@ -228,7 +269,7 @@ def get_recent_activity(
 
 
 @mcp.tool
-def get_model_usage(
+def list_model_usage(
     project: str | None = None,
     include_totals: bool = False,
     session_id: str | None = None,
@@ -250,7 +291,7 @@ def get_model_usage(
 
 
 @mcp.tool
-def get_tool_usage(
+def list_tool_usage(
     project: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get tool usage frequency ranking across messages.
@@ -261,47 +302,6 @@ def get_tool_usage(
     try:
         engine = _get_engine()
         return engine.get_tool_usage(project=project)
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
-def get_project_tree(
-    project: str | None = None,
-    limit_sessions: int = 50,
-) -> list[dict[str, Any]]:
-    """Get hierarchical project tree: projects -> sessions -> message summaries.
-
-    Args:
-        project: Filter by project path or name (partial match)
-        limit_sessions: Max sessions per project (default 50)
-    """
-    try:
-        engine = _get_engine()
-        return engine.get_project_tree(project=project, limit_sessions=limit_sessions)
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
-def get_project_stats(
-    project: str,
-    detail_level: str = "full",
-) -> dict[str, Any] | list[dict[str, Any]]:
-    """Get aggregated statistics for a project.
-
-    Args:
-        project: Project path or display name (partial match)
-        detail_level: "basic" or "full".
-            - "basic": Returns only fields matching list_projects
-            - "full": Returns all stats including session_count, unique_models, top_tools, etc.
-    """
-    try:
-        engine = _get_engine()
-        result = engine.get_project_stats(project=project, detail_level=detail_level)
-        if result is None:
-            return {"error": f"Project not found: {project}"}
-        return result
     except Exception as e:
         return [{"error": str(e)}]
 

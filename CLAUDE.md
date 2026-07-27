@@ -48,7 +48,7 @@ Defined in `pyproject.toml` as `claude-history-mcp` (dashes): calls `claude_hist
 
 10 tools, 2 resources — all defined in `server.py` with try/except wrappers returning `{"error": str(e)}` on failure:
 
-- `list_sessions`, `search_messages`, `get_session`, `get_session_stats`, `search_history`, `get_recent_activity`, `get_model_usage(include_totals?, session_id?)`, `get_tool_usage`, `get_project_tree`, `get_project_stats(detail_level="basic|full")`
+- `list_sessions_stats`, `search_messages`, `list_session_transcript`, `list_session_stats`, `search_history`, `list_recent_activity`, `list_model_usage(include_totals?, session_id?)`, `list_tool_usage`, `list_project_tree`, `list_project_stats(detail_level="basic|full")`
 - Resources: `claude://projects`, `claude://history`
 
 Tools accept natural-language date strings ("yesterday", "last week") via `dateparser`.
@@ -82,6 +82,6 @@ The entry point name (`claude-history-mcp`) must match exactly — it's the `[pr
 
 ### Recent Fixes (2026-07-25)
 
-1. **Pagination (offset)** — All list/search tools (`list_sessions`, `search_messages`, `search_history`, `get_recent_activity`) now support `offset` parameter for cursor-based pagination
-2. **Prefix matching in get_session_stats** — `get_session_stats` now resolves session ID prefixes (min 8 chars), matching `get_session` behavior
+1. **Pagination (offset)** — All list/search tools (`list_sessions_stats`, `search_messages`, `search_history`, `list_recent_activity`) now support `offset` parameter for cursor-based pagination
+2. **Prefix matching in list_session_stats** — `list_session_stats` now resolves session ID prefixes (min 8 chars), matching `list_session_transcript` behavior
 3. **Type safety** — Resolved all 59 pyright static analysis errors across source and tests; now runs at 0 errors, 0 warnings
