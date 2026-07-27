@@ -35,7 +35,7 @@ def _get_engine() -> SearchEngine:
 def list_project_stats(
     project: str,
     detail_level: str = "basic",
-) -> dict[str, Any] | list[dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get aggregated statistics for a project.
 
     Args:
@@ -48,8 +48,8 @@ def list_project_stats(
         engine = _get_engine()
         result = engine.get_project_stats(project=project, detail_level=detail_level)
         if result is None:
-            return {"error": f"Project not found: {project}"}
-        return result
+            return [{"error": f"Project not found: {project}"}]
+        return [result]
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -106,7 +106,7 @@ def list_project_tree(
 def list_session_transcript(
     session_id: str,
     include_thinking: bool = False,
-) -> dict[str, Any]:
+) -> list[dict[str, Any]]:
     """Get full conversation transcript for a session.
 
     Returns the complete message history including user prompts,
@@ -118,18 +118,20 @@ def list_session_transcript(
     """
     try:
         if len(session_id) < 8:
-            return {"error": "session_id must be at least 8 characters"}
+            return [{"error": "session_id must be at least 8 characters"}]
         engine = _get_engine()
         result = engine.get_session(session_id)
         if result is None:
-            return {"error": f"Session not found: {session_id}"}
+            return [{"error": f"Session not found: {session_id}"}]
         # Handle ambiguous prefix match
         if isinstance(result, dict) and result.get("error") == "ambiguous_prefix":
             candidates = result["candidates"]
-            return {
-                "error": f"Multiple sessions match prefix '{session_id}'. Use more characters:",
-                "candidates": candidates,
-            }
+            return [
+                {
+                    "error": f"Multiple sessions match prefix '{session_id}'. Use more characters:",
+                    "candidates": candidates,
+                }
+            ]
         # Filter thinking blocks if requested
         if not include_thinking and "messages" in result:
             for msg in result["messages"]:
@@ -142,13 +144,13 @@ def list_session_transcript(
                         msg["raw_json"] = json.dumps(raw, ensure_ascii=False)
                     except Exception:
                         logger.exception("Failed to filter thinking blocks")
-        return result
+        return [result]
     except Exception as e:
-        return {"error": str(e)}
+        return [{"error": str(e)}]
 
 
 @mcp.tool
-def list_session_stats(session_id: str) -> dict[str, Any]:
+def list_session_stats(session_id: str) -> list[dict[str, Any]]:
     """Get token usage, tool call counts, and duration for a session.
 
     Args:
@@ -156,14 +158,14 @@ def list_session_stats(session_id: str) -> dict[str, Any]:
     """
     try:
         if len(session_id) < 8:
-            return {"error": "session_id must be at least 8 characters"}
+            return [{"error": "session_id must be at least 8 characters"}]
         engine = _get_engine()
         result = engine.get_session_stats(session_id)
         if result is None:
-            return {"error": f"Session not found: {session_id}"}
-        return result
+            return [{"error": f"Session not found: {session_id}"}]
+        return [result]
     except Exception as e:
-        return {"error": str(e)}
+        return [{"error": str(e)}]
 
 
 @mcp.tool
@@ -273,7 +275,7 @@ def list_model_usage(
     project: str | None = None,
     include_totals: bool = False,
     session_id: str | None = None,
-) -> list[dict[str, Any]] | dict[str, Any]:
+) -> list[dict[str, Any]]:
     """Get usage breakdown grouped by model with estimated costs.
 
     Args:
@@ -283,11 +285,14 @@ def list_model_usage(
     """
     try:
         engine = _get_engine()
-        return engine.get_model_usage(
+        result = engine.get_model_usage(
             project=project, include_totals=include_totals, session_id=session_id
         )
+        if isinstance(result, dict):
+            return [result]
+        return result
     except Exception as e:
-        return {"error": str(e)}
+        return [{"error": str(e)}]
 
 
 @mcp.tool
@@ -335,6 +340,24 @@ def get_history_resource() -> str:
     for cmd in commands:
         lines.append(f"- `{cmd.get('display', '')}` ({cmd.get('project', 'unknown')})")
     return "\n".join(lines)
+
+
+@mcp.resource("claude://health")
+def get_health_resource() -> str:
+    """Cache health and statistics for debugging."""
+    try:
+        engine = _get_engine()
+        stats = engine.cache.get_stats()
+        return (
+            "# Claude History MCP Health\n\n"
+            f"- Projects: {stats['projects']}\n"
+            f"- Sessions: {stats['sessions']}\n"
+            f"- Messages: {stats['messages']}\n"
+            f"- History Commands: {stats['history_commands']}\n"
+            f"- FTS5: {'Enabled' if getattr(engine.cache, '_fts_available', False) else 'Disabled (LIKE fallback)'}"
+        )
+    except Exception as e:
+        return f"Health check failed: {e}"
 
 
 def main() -> None:

@@ -46,13 +46,14 @@ Defined in `pyproject.toml` as `claude-history-mcp` (dashes): calls `claude_hist
 
 ### MCP Tools & Resources
 
-10 tools, 2 resources — all defined in `server.py` with try/except wrappers returning `{"error": str(e)}` on failure:
+10 tools, 3 resources — all defined in `server.py` with try/except wrappers returning `[{"error": str(e)}]` on failure:
 
 - `list_sessions_stats`, `search_messages`, `list_session_transcript`, `list_session_stats`, `search_history`, `list_recent_activity`, `list_model_usage(include_totals?, session_id?)`, `list_tool_usage`, `list_project_tree`, `list_project_stats(detail_level="basic|full")`
-- Resources: `claude://projects`, `claude://history`
+- Resources: `claude://projects`, `claude://history`, `claude://health`
 
 Tools accept natural-language date strings ("yesterday", "last week") via `dateparser`.
 All list/search tools support `offset` parameter for cursor-based pagination.
+All tools return `list[dict]` consistently — single results are wrapped in a list.
 
 ### Real-World Edge Cases (handled by local parser)
 
@@ -85,3 +86,9 @@ The entry point name (`claude-history-mcp`) must match exactly — it's the `[pr
 1. **Pagination (offset)** — All list/search tools (`list_sessions_stats`, `search_messages`, `search_history`, `list_recent_activity`) now support `offset` parameter for cursor-based pagination
 2. **Prefix matching in list_session_stats** — `list_session_stats` now resolves session ID prefixes (min 8 chars), matching `list_session_transcript` behavior
 3. **Type safety** — Resolved all 59 pyright static analysis errors across source and tests; now runs at 0 errors, 0 warnings
+
+### Recent Fixes (2026-07-27)
+
+1. **FTS5 full-text search** — SQLite FTS5 virtual table (`messages_fts`) with `unicode61` tokenizer for efficient search. Falls back to `LIKE` if FTS5 unavailable. Triggers keep index in sync with messages table.
+2. **Consistent error returns** — All tools return `list[dict]` with `{"error": "..."}` format on failure. Single results wrapped in list for uniform client handling.
+3. **Health resource** — `claude://health` resource for debugging and monitoring (cache stats, FTS5 status).

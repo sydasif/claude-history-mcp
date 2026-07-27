@@ -252,7 +252,12 @@ def test_search_history_finds_matching_display(tmp_path):
                 "sessionId": "s1",
                 "timestamp": 1000,
             },
-            {"display": "unrelated command", "project": "/a", "sessionId": "s1", "timestamp": 1001},
+            {
+                "display": "unrelated command",
+                "project": "/a",
+                "sessionId": "s1",
+                "timestamp": 1001,
+            },
         ]
     )
     results = cache.search_history("litellm")
@@ -277,7 +282,12 @@ def test_clear_all_empties_tables(tmp_path):
     pid = cache.upsert_project("/a", "a")
     cache.upsert_session(pid, "s1")
     cache.clear_all()
-    assert cache.get_stats() == {"projects": 0, "sessions": 0, "messages": 0, "history_commands": 0}
+    assert cache.get_stats() == {
+        "projects": 0,
+        "sessions": 0,
+        "messages": 0,
+        "history_commands": 0,
+    }
 
 
 def test_get_stats_counts(tmp_path):
@@ -292,7 +302,10 @@ def test_get_stats_counts(tmp_path):
 def test_transaction_commits_on_success(tmp_path):
     cache = _cache(tmp_path)
     with cache.transaction() as conn:
-        conn.execute("INSERT INTO projects (project_path, display_name) VALUES (?, ?)", ("/a", "a"))
+        conn.execute(
+            "INSERT INTO projects (project_path, display_name) VALUES (?, ?)",
+            ("/a", "a"),
+        )
     assert cache.get_project("/a") is not None
 
 
@@ -301,7 +314,8 @@ def test_transaction_rolls_back_on_exception(tmp_path):
     try:
         with cache.transaction() as conn:
             conn.execute(
-                "INSERT INTO projects (project_path, display_name) VALUES (?, ?)", ("/a", "a")
+                "INSERT INTO projects (project_path, display_name) VALUES (?, ?)",
+                ("/a", "a"),
             )
             raise RuntimeError("boom")
     except RuntimeError:
@@ -353,3 +367,53 @@ def test_get_changed_files_detects_new_and_modified(tmp_path):
     cache.set_file_mtime(str(f), f.stat().st_mtime)
     # Now tracked and unchanged -> no changes
     assert cache.get_changed_files([f]) == []
+
+
+def test_fts5_available_after_connect(tmp_path):
+    cache = _cache(tmp_path)
+    cache.connect()
+    assert getattr(cache, "_fts_available", False) is True
+
+
+def test_fts5_search_finds_content(tmp_path):
+    cache = _cache(tmp_path)
+    pid = cache.upsert_project("/a", "a")
+    cache.insert_messages(
+        pid,
+        "s1",
+        "file.jsonl",
+        [
+            {
+                "entry_type": "user",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "uuid": "u1",
+                "content_text": "find the payment bug",
+                "raw_json": "{}",
+            },
+        ],
+    )
+    results = cache.search_messages("payment")
+    assert len(results) == 1
+    assert "payment" in results[0]["content_text"]
+
+
+def test_fts5_clear_all_removes_index(tmp_path):
+    cache = _cache(tmp_path)
+    pid = cache.upsert_project("/a", "a")
+    cache.insert_messages(
+        pid,
+        "s1",
+        "file.jsonl",
+        [
+            {
+                "entry_type": "user",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "uuid": "u1",
+                "content_text": "test content",
+                "raw_json": "{}",
+            },
+        ],
+    )
+    cache.clear_all()
+    results = cache.search_messages("test")
+    assert len(results) == 0

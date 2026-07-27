@@ -4,6 +4,7 @@ Provides thread-safe CRUD operations with WAL mode and connection pooling.
 """
 
 import json
+import logging
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -11,6 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from collections.abc import Generator
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -84,6 +87,28 @@ CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_history_project ON history_commands(project);
 """
 
+FTS5_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content_text,
+    content='messages',
+    content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content_text) VALUES (new.id, new.content_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content_text) VALUES('delete', old.id, old.content_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content_text) VALUES('delete', old.id, old.content_text);
+    INSERT INTO messages_fts(rowid, content_text) VALUES (new.id, new.content_text);
+END;
+"""
+
 
 def _utcnow() -> str:
     return datetime.now(UTC).isoformat()
@@ -111,6 +136,9 @@ class CacheManager:
 
     Provides CRUD operations for projects, sessions, messages, and command history.
     Uses WAL mode for concurrent access and connection pooling for performance.
+
+    Note: This implementation assumes single-threaded access (MCP stdio transport).
+    The threading lock is a safety net, not a performance feature.
     """
 
     def __init__(self, db_path: Path):
@@ -136,7 +164,36 @@ class CacheManager:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.executescript(SCHEMA)
+            self._setup_fts()
         return self._conn
+
+    def _setup_fts(self) -> None:
+        """Set up FTS5 virtual table and triggers if not present."""
+        if self._conn is None:
+            return
+        try:
+            self._conn.executescript(FTS5_SCHEMA)
+            self._fts_available = True
+            self._backfill_fts()
+        except Exception:
+            logger.warning("FTS5 not available; falling back to LIKE search")
+            self._fts_available = False
+
+    def _backfill_fts(self) -> None:
+        """Backfill FTS table from existing messages."""
+        if self._conn is None or not self._fts_available:
+            return
+        try:
+            count = self._conn.execute("SELECT COUNT(*) FROM messages_fts").fetchone()[
+                0
+            ]
+            if count == 0:
+                self._conn.execute(
+                    "INSERT INTO messages_fts(rowid, content_text) SELECT id, content_text FROM messages"
+                )
+                self._conn.commit()
+        except Exception:
+            logger.exception("Failed to backfill FTS table")
 
     def close(self) -> None:
         """Close database connection if open."""
@@ -346,12 +403,49 @@ class CacheManager:
         role: str | None = None,
         limit: int = 50,
     ) -> list[dict]:
-        """Substring search across messages."""
+        """Full-text search across messages using FTS5 when available."""
+        if getattr(self, "_fts_available", False) and query:
+            try:
+                return self._search_messages_fts(
+                    query, project_id, session_id, role, limit
+                )
+            except Exception:
+                logger.exception("FTS5 search failed, falling back to LIKE")
+
         sql = (
             "SELECT m.*, p.project_path, p.display_name FROM messages m "
             "JOIN projects p ON m.project_id=p.id WHERE m.content_text LIKE ?"
         )
         params: list = [f"%{query}%"]
+        if project_id:
+            sql += " AND m.project_id=?"
+            params.append(project_id)
+        if session_id:
+            sql += " AND m.session_id=?"
+            params.append(session_id)
+        if role:
+            sql += " AND m.entry_type=?"
+            params.append(role)
+        sql += " ORDER BY m.timestamp DESC LIMIT ?"
+        params.append(limit)
+        return [dict(r) for r in self.connect().execute(sql, params).fetchall()]
+
+    def _search_messages_fts(
+        self,
+        query: str,
+        project_id: int | None = None,
+        session_id: str | None = None,
+        role: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """FTS5-based message search."""
+        sql = (
+            "SELECT m.*, p.project_path, p.display_name FROM messages m "
+            "JOIN messages_fts f ON m.id = f.rowid "
+            "JOIN projects p ON m.project_id=p.id "
+            "WHERE messages_fts MATCH ?"
+        )
+        params: list = [query]
         if project_id:
             sql += " AND m.project_id=?"
             params.append(project_id)
@@ -461,6 +555,8 @@ class CacheManager:
         conn = self.connect()
         for table in self._TABLE_NAMES:
             conn.execute(f"DELETE FROM {table}")  # noqa: S608 — table names from whitelist
+        if getattr(self, "_fts_available", False):
+            conn.execute("DELETE FROM messages_fts")
         conn.commit()
 
     def get_stats(self) -> dict:

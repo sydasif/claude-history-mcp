@@ -106,10 +106,10 @@ async def test_get_session_stats():
         sid = sessions.data[0]["session_id"]
         result = await client.call_tool("list_session_stats", {"session_id": sid})
         # Just verify it returns valid stats structure
-        assert "message_count" in result.data
-        assert "total_input_tokens" in result.data
-        assert "total_output_tokens" in result.data
-        assert result.data["message_count"] > 0
+        assert "message_count" in result.data[0]
+        assert "total_input_tokens" in result.data[0]
+        assert "total_output_tokens" in result.data[0]
+        assert result.data[0]["message_count"] > 0
 
 
 @pytest.mark.asyncio
@@ -160,6 +160,7 @@ async def test_server_has_expected_resources():
         resource_uris = [str(r.uri) for r in resources]
         assert "claude://projects" in resource_uris
         assert "claude://history" in resource_uris
+        assert "claude://health" in resource_uris
 
 
 @pytest.mark.asyncio
@@ -183,9 +184,10 @@ async def test_new_analytics_tools():
         res_totals = await client.call_tool(
             "list_model_usage", {"include_totals": True}
         )
-        assert isinstance(res_totals.data, dict)
-        assert "breakdown" in res_totals.data
-        assert "total_cost_usd" in res_totals.data
+        assert isinstance(res_totals.data, list)
+        assert len(res_totals.data) == 1
+        assert "breakdown" in res_totals.data[0]
+        assert "total_cost_usd" in res_totals.data[0]
 
         res_tools = await client.call_tool("list_tool_usage", {})
         assert isinstance(res_tools.data, list)
@@ -218,6 +220,7 @@ async def test_new_tree_and_export_tools():
         res_stats = await client.call_tool(
             "list_project_stats", {"project": proj_name, "detail_level": "full"}
         )
-        assert isinstance(res_stats.data, dict)
-        assert "project_path" in res_stats.data
-        assert "session_count" in res_stats.data
+        assert isinstance(res_stats.data, list)
+        assert len(res_stats.data) == 1
+        assert "project_path" in res_stats.data[0]
+        assert "session_count" in res_stats.data[0]
