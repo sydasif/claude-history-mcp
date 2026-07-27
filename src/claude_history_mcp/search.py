@@ -447,7 +447,7 @@ class SearchEngine:
 
     # --- Project Stats (aggregated) ---
     def get_project_stats(
-        self, project: str, detail_level: str = "full"
+        self, project: str, detail_level: str = "basic"
     ) -> dict | None:
         """Get aggregated statistics for a project.
 

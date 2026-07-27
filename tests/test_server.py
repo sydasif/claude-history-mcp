@@ -215,7 +215,9 @@ async def test_new_tree_and_export_tools():
 
         # Test list_project_stats
         proj_name = res_tree.data[0]["display_name"]
-        res_stats = await client.call_tool("list_project_stats", {"project": proj_name})
+        res_stats = await client.call_tool(
+            "list_project_stats", {"project": proj_name, "detail_level": "full"}
+        )
         assert isinstance(res_stats.data, dict)
         assert "project_path" in res_stats.data
         assert "session_count" in res_stats.data

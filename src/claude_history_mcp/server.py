@@ -34,7 +34,7 @@ def _get_engine() -> SearchEngine:
 @mcp.tool
 def list_project_stats(
     project: str,
-    detail_level: str = "full",
+    detail_level: str = "basic",
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """Get aggregated statistics for a project.
 
