@@ -35,7 +35,7 @@ def _get_engine() -> SearchEngine:
 
 
 @mcp.tool
-def list_project_stats(
+def get_project_stats(
     project: str,
     detail_level: str = "basic",
 ) -> list[dict[str, Any]]:
@@ -58,7 +58,7 @@ def list_project_stats(
 
 
 @mcp.tool
-def list_sessions_stats(
+def list_sessions(
     project: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
@@ -88,7 +88,7 @@ def list_sessions_stats(
 
 
 @mcp.tool
-def list_project_tree(
+def get_project_tree(
     project: str | None = None,
     limit_sessions: int = 50,
 ) -> list[dict[str, Any]]:
@@ -106,7 +106,7 @@ def list_project_tree(
 
 
 @mcp.tool
-def list_session_transcript(
+def get_session_transcript(
     session_id: str,
     include_thinking: bool = False,
 ) -> list[dict[str, Any]]:
@@ -155,7 +155,7 @@ def list_session_transcript(
 
 
 @mcp.tool
-def list_session_stats(session_id: str) -> list[dict[str, Any]]:
+def get_session_stats(session_id: str) -> list[dict[str, Any]]:
     """Get token usage, tool call counts, and duration for a session.
 
     Args:
@@ -278,7 +278,7 @@ def list_recent_activity(
 
 
 @mcp.tool
-def list_model_usage(
+def get_model_usage(
     project: str | None = None,
     include_totals: bool = False,
     session_id: str | None = None,
@@ -303,7 +303,7 @@ def list_model_usage(
 
 
 @mcp.tool
-def list_tool_usage(
+def get_tool_usage(
     project: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get tool usage frequency ranking across messages.
