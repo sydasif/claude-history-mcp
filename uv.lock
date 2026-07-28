@@ -277,16 +277,9 @@ dependencies = [
     { name = "pydantic" },
 ]
 
-[package.optional-dependencies]
-dev = [
-    { name = "anyio" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-]
-
 [package.dev-dependencies]
 dev = [
+    { name = "anyio" },
     { name = "docsig" },
     { name = "docvet" },
     { name = "mypy" },
@@ -299,18 +292,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anyio", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "dateparser", specifier = ">=1.0" },
     { name = "fastmcp", specifier = ">=3.4" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "anyio", specifier = ">=4.0" },
     { name = "docsig", specifier = ">=0.91.8" },
     { name = "docvet", specifier = ">=1.15.1" },
     { name = "mypy", specifier = ">=1.15" },

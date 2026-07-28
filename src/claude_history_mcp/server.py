@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
+
+_SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,128}$")
 
 if TYPE_CHECKING:
     from .search import SearchEngine
@@ -119,6 +122,8 @@ def list_session_transcript(
     try:
         if len(session_id) < 8:
             return [{"error": "session_id must be at least 8 characters"}]
+        if not _SESSION_ID_PATTERN.match(session_id):
+            return [{"error": "Invalid session_id format"}]
         engine = _get_engine()
         result = engine.get_session(session_id)
         if result is None:
@@ -159,6 +164,8 @@ def list_session_stats(session_id: str) -> list[dict[str, Any]]:
     try:
         if len(session_id) < 8:
             return [{"error": "session_id must be at least 8 characters"}]
+        if not _SESSION_ID_PATTERN.match(session_id):
+            return [{"error": "Invalid session_id format"}]
         engine = _get_engine()
         result = engine.get_session_stats(session_id)
         if result is None:

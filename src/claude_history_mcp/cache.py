@@ -92,7 +92,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     content_text,
     content='messages',
     content_rowid='id',
-    tokenize='unicode61 remove_diacritics 2'
+    tokenize='unicode61 remove_diacritics 2',
+    prefix='2,3,4,5'
 );
 
 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
@@ -271,7 +272,7 @@ class CacheManager:
         )
         conn.commit()
 
-    def get_project(self, project_path: str) -> dict | None:
+    def get_project(self, project_path: str) -> dict[str, Any] | None:
         row = (
             self.connect()
             .execute("SELECT * FROM projects WHERE project_path=?", (project_path,))
@@ -279,7 +280,7 @@ class CacheManager:
         )
         return dict(row) if row else None
 
-    def get_all_projects(self) -> list[dict]:
+    def get_all_projects(self) -> list[dict[str, Any]]:
         rows = (
             self.connect()
             .execute("SELECT * FROM projects ORDER BY last_updated DESC")
@@ -321,7 +322,7 @@ class CacheManager:
 
     def get_sessions(
         self, project_id: int | None = None, limit: int = 100
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         if project_id:
             rows = (
                 self.connect()
@@ -346,7 +347,7 @@ class CacheManager:
             )
         return [dict(r) for r in rows]
 
-    def get_session(self, session_id: str) -> dict | None:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         row = (
             self.connect()
             .execute(
@@ -402,7 +403,7 @@ class CacheManager:
         session_id: str | None = None,
         role: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Full-text search across messages using FTS5 when available."""
         if getattr(self, "_fts_available", False) and query:
             try:
@@ -437,7 +438,7 @@ class CacheManager:
         session_id: str | None = None,
         role: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """FTS5-based message search."""
         sql = (
             "SELECT m.*, p.project_path, p.display_name FROM messages m "
@@ -461,7 +462,7 @@ class CacheManager:
 
     def get_session_messages(
         self, session_id: str, limit: int | None = None, offset: int = 0
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get messages for a session in order, with optional pagination."""
         sql = "SELECT * FROM messages WHERE session_id=? ORDER BY id ASC"
         params: list[Any] = [session_id]
@@ -487,7 +488,7 @@ class CacheManager:
 
     def search_history(
         self, query: str, project: str | None = None, limit: int = 50
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         sql = "SELECT * FROM history_commands WHERE display LIKE ?"
         params: list = [f"%{query}%"]
         if project:
@@ -559,7 +560,7 @@ class CacheManager:
             conn.execute("DELETE FROM messages_fts")
         conn.commit()
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, int]:
         conn = self.connect()
         return {
             "projects": conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0],
@@ -573,7 +574,7 @@ class CacheManager:
     # --- Analytics & Aggregations ---
     def get_usage_trends(
         self, project_id: int | None = None, limit_days: int = 30
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get daily usage trends (messages, tokens) grouped by date."""
         conn = self.connect()
         sql = (
@@ -591,7 +592,7 @@ class CacheManager:
         params.append(limit_days)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
-    def get_model_usage(self, project_id: int | None = None) -> list[dict]:
+    def get_model_usage(self, project_id: int | None = None) -> list[dict[str, Any]]:
         """Get usage breakdown grouped by model."""
         conn = self.connect()
         sql = (
@@ -608,7 +609,7 @@ class CacheManager:
         sql += " GROUP BY model ORDER BY message_count DESC"
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
-    def get_tool_usage(self, project_id: int | None = None) -> list[dict]:
+    def get_tool_usage(self, project_id: int | None = None) -> list[dict[str, Any]]:
         """Get tool usage frequency across messages."""
         conn = self.connect()
         sql = "SELECT tool_names FROM messages WHERE tool_names IS NOT NULL AND tool_names != '[]'"
@@ -633,7 +634,7 @@ class CacheManager:
 
     def get_cost_data(
         self, project_id: int | None = None, session_id: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get raw token and model data for cost calculation."""
         conn = self.connect()
         sql = "SELECT model, tokens_input, tokens_output, session_id FROM messages WHERE (tokens_input > 0 OR tokens_output > 0)"
@@ -649,7 +650,7 @@ class CacheManager:
     # --- Project Tree ---
     def get_project_tree(
         self, project_id: int | None = None, limit_sessions: int = 50
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get hierarchical project tree: project → sessions → message summaries.
 
         Args:
