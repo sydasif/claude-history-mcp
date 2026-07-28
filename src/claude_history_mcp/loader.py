@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .cache import CacheManager as OurCacheManager
+from .cache import CacheManager
 from .discovery import discover_projects, _extract_display_name
 from .models import SILENT_SKIP_TYPES
 from .parser import (
@@ -31,7 +31,7 @@ class LoadResult:
 
 def load_jsonl_file(
     file_path: Path,
-    cache: OurCacheManager,
+    cache: CacheManager,
     project_id: int,
 ) -> LoadResult:
     """Parse a single JSONL file and store in our cache."""
@@ -183,7 +183,7 @@ def load_jsonl_file(
     )
 
 
-def load_history_file(file_path: Path, cache: OurCacheManager) -> int:
+def load_history_file(file_path: Path, cache: CacheManager) -> int:
     """Parse history.jsonl and store commands in our cache."""
     commands = []
     with file_path.open(encoding="utf-8", errors="replace") as f:
@@ -210,7 +210,7 @@ def load_history_file(file_path: Path, cache: OurCacheManager) -> int:
 
 def load_project(
     project_path: Path,
-    cache: OurCacheManager,
+    cache: CacheManager,
     force: bool = False,
 ) -> list[LoadResult]:
     """Load all JSONL files in a project directory, reparsing only changed files."""
@@ -242,7 +242,7 @@ def load_project(
 
 
 def load_all_projects(
-    cache: OurCacheManager,
+    cache: CacheManager,
     projects_dir: Path | None = None,
     force: bool = False,
 ) -> list[LoadResult]:

@@ -22,6 +22,19 @@ from .models import (
 )
 
 
+def _passthrough(data: dict[str, Any], entry_type: str) -> PassthroughEntry:
+    """Build a PassthroughEntry for an unknown/malformed entry with DAG fields."""
+    return PassthroughEntry(
+        uuid=data["uuid"],
+        parentUuid=data.get("parentUuid"),
+        sessionId=data["sessionId"],
+        timestamp=data.get("timestamp", ""),
+        type=entry_type,
+        isSidechain=data.get("isSidechain", False),
+        agentId=data.get("agentId"),
+    )
+
+
 def create_entry(data: dict[str, Any]) -> Any | None:
     """Parse raw JSON dict into typed model. Returns None for skip types."""
     entry_type = data.get("type", "")
@@ -45,28 +58,12 @@ def create_entry(data: dict[str, Any]) -> Any | None:
             return AttachmentEntry.model_validate(data)
         elif data.get("uuid") and data.get("sessionId"):
             # Unknown type with DAG fields - keep for searchability
-            return PassthroughEntry(
-                uuid=data["uuid"],
-                parentUuid=data.get("parentUuid"),
-                sessionId=data["sessionId"],
-                timestamp=data.get("timestamp", ""),
-                type=entry_type,
-                isSidechain=data.get("isSidechain", False),
-                agentId=data.get("agentId"),
-            )
+            return _passthrough(data, entry_type)
         return None
     except Exception:
         # Malformed data - try to create a PassthroughEntry if possible
         if data.get("uuid") and data.get("sessionId"):
-            return PassthroughEntry(
-                uuid=data["uuid"],
-                parentUuid=data.get("parentUuid"),
-                sessionId=data["sessionId"],
-                timestamp=data.get("timestamp", ""),
-                type=entry_type,
-                isSidechain=data.get("isSidechain", False),
-                agentId=data.get("agentId"),
-            )
+            return _passthrough(data, entry_type)
         # Unknown type with uuid -> keep for searchability
         if data.get("uuid"):
             try:

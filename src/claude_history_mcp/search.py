@@ -83,16 +83,7 @@ class SearchEngine:
         offset: int = 0,
     ) -> list[dict]:
         """Search messages with multiple filters and pagination."""
-        project_id = None
-        if project:
-            projects = self.cache.get_all_projects()
-            for p in projects:
-                if (
-                    project.lower()
-                    in (p.get("project_path", "") + p.get("display_name", "")).lower()
-                ):
-                    project_id = p["id"]
-                    break
+        project_id = self._resolve_project_id(project) if project else None
 
         results = self.cache.search_messages(
             query=query,
@@ -150,24 +141,35 @@ class SearchEngine:
 
         return formatted_results[offset : offset + limit]
 
+    def _resolve_session(self, session_id: str) -> dict | None:
+        """Resolve a session by exact ID or unambiguous prefix (min 8 chars upstream).
+
+        Returns the session dict, an {"error": "ambiguous_prefix", "candidates": [...]}
+        dict if the prefix matches multiple sessions, or None if there's no match.
+        """
+        session = self.cache.get_session(session_id)
+        if session:
+            return session
+        sessions = self.cache.get_sessions(limit=1000)
+        matches = [s for s in sessions if s["session_id"].startswith(session_id)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            return {
+                "error": "ambiguous_prefix",
+                "candidates": [m["session_id"] for m in matches[:10]],
+            }
+        return None
+
     def get_session(self, session_id: str) -> dict | None:
         """Get full session with messages."""
-        session = self.cache.get_session(session_id)
-        if not session:
-            # Try prefix match
-            sessions = self.cache.get_sessions(limit=1000)
-            matches = [s for s in sessions if s["session_id"].startswith(session_id)]
-            if len(matches) == 1:
-                session = matches[0]
-                session_id = matches[0]["session_id"]
-            elif len(matches) > 1:
-                # Ambiguous — return list of candidates so caller can disambiguate
-                return {
-                    "error": "ambiguous_prefix",
-                    "candidates": [m["session_id"] for m in matches[:10]],
-                }
+        session = self._resolve_session(session_id)
         if not session:
             return None
+        if session.get("error") == "ambiguous_prefix":
+            # Ambiguous — return list of candidates so caller can disambiguate
+            return session
+        session_id = session["session_id"]
 
         messages = self.cache.get_session_messages(session_id)
         # Transform messages to include role and text fields
@@ -194,21 +196,12 @@ class SearchEngine:
 
     def get_session_stats(self, session_id: str) -> dict | None:
         """Get token usage and tool statistics for a session."""
-        session = self.cache.get_session(session_id)
-        if not session:
-            # Try prefix match
-            sessions = self.cache.get_sessions(limit=1000)
-            matches = [s for s in sessions if s["session_id"].startswith(session_id)]
-            if len(matches) == 1:
-                session = matches[0]
-                session_id = matches[0]["session_id"]
-            elif len(matches) > 1:
-                return {
-                    "error": "ambiguous_prefix",
-                    "candidates": [m["session_id"] for m in matches[:10]],
-                }
+        session = self._resolve_session(session_id)
         if not session:
             return None
+        if session.get("error") == "ambiguous_prefix":
+            return session
+        session_id = session["session_id"]
 
         messages = self.cache.get_session_messages(session_id)
         tool_counts: dict[str, int] = {}
