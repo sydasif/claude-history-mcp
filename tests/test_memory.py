@@ -1,10 +1,9 @@
 import json
-import os
 from pathlib import Path
 
 import pytest
 
-from claude_history_mcp.memory import mental_model, reflect, retain
+from claude_history_mcp.memory import reflect, retain
 from claude_history_mcp.cache import CacheManager
 from claude_history_mcp.search import SearchEngine
 
@@ -182,51 +181,5 @@ def test_reflect_gathers_evidence(setup_scratch_home):
 
 def test_reflect_project_not_found():
     res = reflect(project="missing", query="test")
-    assert len(res) == 1
-    assert "error" in res[0]
-
-
-def test_mental_model_lifecycle(setup_scratch_home):
-    # 1. Create mental model
-    res = mental_model(
-        project="testproj",
-        source_query="What is the architecture of the project?",
-    )
-    assert len(res) == 1
-    model = res[0]
-    assert model["status"] == "created_empty"
-    assert model["stale"] is False
-
-    model_path = Path(model["path"])
-    assert model_path.exists()
-
-    # 2. Retrieve existing model (should be current)
-    res2 = mental_model(
-        project="testproj",
-        source_query="What is the architecture of the project?",
-    )
-    assert len(res2) == 1
-    assert res2[0]["status"] == "current"
-    assert res2[0]["stale"] is False
-
-    # 3. Modify session file mtime to trigger staleness detection
-    session_file = setup_scratch_home / "sess12345.jsonl"
-    # Touch file with future or past mtime
-    os.utime(
-        session_file, (session_file.stat().st_atime, session_file.stat().st_mtime + 100)
-    )
-
-    res3 = mental_model(
-        project="testproj",
-        source_query="What is the architecture of the project?",
-    )
-    assert len(res3) == 1
-    assert res3[0]["stale"] is True
-    assert res3[0]["status"] == "stale"
-    assert "changed_since_refresh" in res3[0]
-
-
-def test_mental_model_project_not_found():
-    res = mental_model(project="missing", source_query="test")
     assert len(res) == 1
     assert "error" in res[0]

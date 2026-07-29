@@ -29,7 +29,7 @@ uv run python -m claude_history_mcp.server  # Run the MCP server directly
 - **cache.py** — SQLite with WAL mode, threading lock. 5 tables: `projects`, `sessions`, `messages`, `history_commands`, `file_tracking`. `recompute_project_stats()` rolls up session aggregates to parent project.
 - **search.py** — `SearchEngine` wraps `CacheManager` with natural-language date parsing (`dateparser`), prefix-based session-ID matching, and post-filtering for tool names and dates.
 - **models.py** — Re-exports library types (`TranscriptEntry`, `UserTranscriptEntry`, etc.) + MCP-specific response models (`SessionSummary`, `ProjectInfo`, `MessageResult`, etc.)
-- **memory.py** — Wraps project memory notes (`memory/`), providing `memory_retain` and `memory_reflect` with mtime-based staleness fingerprinting.
+- **memory.py** — Wraps project memory notes (`memory/`), providing `memory_retain` and `memory_reflect` tools.
 - **utils.py** — `scrub_surrogates()` handles lone U+D800–U+DFFF characters, `parse_timestamp()` handles ISO 8601 with/without Z suffix, path helpers.
 
 ### Module Dependencies
@@ -81,15 +81,6 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 ```
 
 The entry point name (`claude-history-mcp`) must match exactly — it's the `[project.scripts]` key in `pyproject.toml`.
-
-### Recent Fixes (2026-07-29)
-
-1. **Memory decay engine** — Added Ebbinghaus forgetting-curve based memory decay to `memory_retain` / `memory_reflect`:
-   - `MemoryDecayEngine` class in `memory_engine.py` (vendored from Emmimal/memory-decay-engine, MIT, zero deps)
-   - Retention: `R = e^(-t / S)` where `S` grows with each recall: `S *= (1 + ln(1 + n))`
-   - Auto-eviction on `memory_reflect` when `R < 0.20`
-   - `note_type="decision"` or `"bug"` → `is_foundational=True` → never decays
-   - 13 new tests in `tests/test_memory_decay.py`
 
 ### Recent Fixes (2026-07-27)
 

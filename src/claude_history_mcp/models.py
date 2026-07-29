@@ -5,7 +5,6 @@ needed by the MCP server is defined here.
 """
 
 from typing import Any, Literal
-from dataclasses import dataclass
 
 from pydantic import BaseModel
 
@@ -273,27 +272,4 @@ __all__ = [
     "TranscriptEntry",
     # Constants
     "SILENT_SKIP_TYPES",
-    # Memory
-    "MemoryNote",
 ]
-
-
-@dataclass
-class MemoryNote:
-    """Project memory note with decay engine metadata."""
-
-    note_id: str
-    project: str
-    statement: str
-    description: str
-    note_type: str  # observation | world | experience | decision | bug
-    session_ids: list[str]
-    related: list[str]
-    created_at: str  # ISO timestamp
-    # Decay engine fields
-    is_foundational: bool = False
-    stability: float = 8.0
-    recall_count: int = 1
-    last_recalled_turn: int = 0
-    evicted: bool = False
-    evicted_at_turn: int | None = None

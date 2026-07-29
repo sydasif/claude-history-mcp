@@ -1,11 +1,10 @@
 """Memory tools for Claude History MCP.
 
 Wraps the existing markdown memory graph that Claude Code auto-generates under
-projects/<project>/memory/. Adds three tools:
+projects/<project>/memory/. Adds two tools:
 
 - retain: write a new memory note grounded in specific JSONL sessions
 - reflect: gather evidence from memory notes + JSONL and return a structured bundle
-- mental_model: pin a cached summary with auto-refresh on new session arrivals
 
 No LLM dependency is added to the server. reflect returns structured evidence;
 the calling Claude Code session does the synthesis.
@@ -23,7 +22,6 @@ from typing import Any
 
 from .search import SearchEngine
 from .utils import scrub_surrogates
-from .memory_engine import MemoryDecayEngine
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +29,6 @@ _MEMORY_DIR = "memory"
 _MEMORY_INDEX = "MEMORY.md"
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---", re.DOTALL)
 _NAME_RE = re.compile(r"^name:\s*(.+)$", re.MULTILINE)
-
-# Global decay engine instance (per-process, like _engine in server.py)
-_decay_engine: MemoryDecayEngine | None = None
-
-
-def _get_decay_engine() -> MemoryDecayEngine:
-    global _decay_engine
-    if _decay_engine is None:
-        _decay_engine = MemoryDecayEngine()
-    return _decay_engine
 
 
 def _claude_projects_root() -> Path:
@@ -225,22 +213,10 @@ def _retain_note(
     body = "\n".join(body_lines) + "\n"
     full = frontmatter + "\n" + body
 
-    if note_path.exists():
-        _write_markdown(note_path, full)
-    else:
-        _write_markdown(note_path, full)
+    note_existed = note_path.exists()
+    _write_markdown(note_path, full)
+    if not note_existed:
         _update_memory_index(project_dir, safe_name, description)
-
-    # Register in decay engine (turn = days since epoch for monotonic advancement)
-    turn = int(datetime.now(UTC).timestamp() // 86400)
-    is_foundational = note_type in ("decision", "bug")  # decisions/bugs never decay
-    engine = _get_decay_engine()
-    engine.register(
-        note_id=safe_name,
-        content=content,
-        current_turn=turn,
-        is_foundational=is_foundational,
-    )
 
     return {
         "name": safe_name,
@@ -325,11 +301,6 @@ def reflect(
         if note_names:
             notes = [n for n in notes if n["name"] in note_names]
 
-        # Advance decay engine turn and evict stale notes
-        turn = int(datetime.now(UTC).timestamp() // 86400)
-        decay_engine = _get_decay_engine()
-        decay_engine.step(turn)
-
         for note in notes[:10]:
             text = _read_markdown(Path(note["path"]))
             front = _parse_frontmatter(text)
@@ -338,8 +309,6 @@ def reflect(
                 if _FRONTMATTER_RE.search(text)
                 else text
             )
-            # Record recall for this note (boosts stability)
-            decay_engine.recall(note["name"], turn)
             evidence.append(
                 {
                     "type": "memory_note",
@@ -414,193 +383,6 @@ def reflect(
     except Exception as e:
         logger.exception("reflect failed")
         return [{"error": str(e)}]
-
-
-def mental_model(
-    project: str,
-    source_query: str,
-    limit: int = 1,
-) -> list[dict[str, Any]]:
-    """Return the pinned mental model for a project, creating it if missing.
-
-    A mental_model is a markdown note in memory/mental-models/ with
-    `node_type: mental_model` frontmatter. Staleness is detected by
-    comparing the project's JSONL file mtime fingerprint against the
-    stored fingerprint in the model frontmatter - the same mechanism
-    the loader uses for cache invalidation.
-
-    Args:
-        project: Project display name or path fragment.
-        source_query: The question this model answers.
-        limit: Max models to return.
-    """
-    try:
-        project_dir = _project_display_to_path(project)
-        if project_dir is None:
-            return [{"error": f"Project not found: {project}"}]
-
-        mdir = _memory_dir_for_project(project_dir)
-        mm_dir = mdir / "mental-models"
-        mm_dir.mkdir(parents=True, exist_ok=True)
-
-        model_file = (
-            mm_dir / f"{hashlib.sha1(source_query.encode()).hexdigest()[:12]}.md"
-        )
-        now = datetime.now(UTC).strftime("%Y-%m-%d")
-
-        if model_file.exists():
-            text = _read_markdown(model_file)
-            front = _parse_frontmatter(text)
-            body = (
-                _FRONTMATTER_RE.sub("", text).strip()
-                if _FRONTMATTER_RE.search(text)
-                else text
-            )
-
-            stale_info = _check_mental_model_staleness(
-                frontmatter=front,
-                project_dir=project_dir,
-            )
-            stale = stale_info.get("stale", False)
-            if stale and front.get("stale", "false").lower() != "true":
-                _mark_model_stale(model_file)
-                front["stale"] = "true"
-
-            result = {
-                "name": front.get("name", model_file.stem),
-                "description": front.get("description", ""),
-                "path": str(model_file),
-                "source_query": front.get("source_query", source_query),
-                "last_refreshed": front.get("last_refreshed", ""),
-                "stale": stale,
-                "scope": front.get("scope", ""),
-                "content": body[:5000],
-                "status": "stale" if stale else "current",
-            }
-            if stale:
-                result["changed_since_refresh"] = stale_info.get("changed_files", [])
-                result["refresh_hint"] = (
-                    "Run memory_reflect on source_query to regenerate"
-                )
-            return [result]
-
-        # No existing model - create a skeleton for the agent to fill.
-        safe_name = re.sub(r"[^a-z0-9-]", "-", source_query.lower().strip("-"))[:60]
-        if not safe_name:
-            safe_name = model_file.stem
-
-        fingerprint = _compute_mtime_fingerprint(project_dir)
-
-        frontmatter = "\n".join(
-            [
-                "---",
-                f"name: {safe_name}",
-                f'description: "Cached answer for: {source_query[:100]}"',
-                "metadata:",
-                "  node_type: mental_model",
-                "  type: project",
-                f"  scope: {project_dir}",
-                f'  source_query: "{source_query}"',
-                f"  last_refreshed: {now}",
-                "  stale: false",
-                f'  mtime_fingerprint: "{fingerprint}"',
-                "---",
-            ]
-        )
-        body = (
-            f"\n# {safe_name.replace('-', ' ').title()}\n\n"
-            f"Source query: {source_query}\n\n"
-            "Run reflect against this source_query to populate this model.\n"
-        )
-        _write_markdown(model_file, frontmatter + body)
-
-        return [
-            {
-                "name": safe_name,
-                "description": f"Cached answer for: {source_query[:100]}",
-                "path": str(model_file),
-                "source_query": source_query,
-                "last_refreshed": now,
-                "stale": False,
-                "scope": str(project_dir),
-                "content": body,
-                "status": "created_empty",
-            }
-        ]
-    except Exception as e:
-        logger.exception("mental_model failed")
-        return [{"error": str(e)}]
-
-
-# ---------------------------------------------------------------------------
-# Staleness helpers
-# ---------------------------------------------------------------------------
-
-
-def _compute_mtime_fingerprint(project_dir: Path) -> str:
-    """Build a compact hash of all JSONL mtimes in a project directory.
-
-    Mirrors the loader's mtime-tracking pattern: any change to a JSONL file
-    will change this fingerprint, marking dependent mental models as stale.
-    """
-    import hashlib as _hashlib
-
-    files = sorted(project_dir.glob("*.jsonl"))
-    if not files:
-        return _hashlib.sha256(b"").hexdigest()[:16]
-
-    h = _hashlib.sha256()
-    for fp in files:
-        try:
-            h.update(str(fp.name).encode())
-            h.update(str(fp.stat().st_mtime_ns).encode())
-        except OSError:
-            continue
-    return h.hexdigest()[:16]
-
-
-def _check_mental_model_staleness(
-    frontmatter: dict[str, str],
-    project_dir: Path,
-) -> dict[str, Any]:
-    """Check whether the project's JSONL files changed since the model was saved.
-
-    Uses an mtime fingerprint stored in the model frontmatter. If the current
-    fingerprint differs, the model is stale. This mirrors the loader's
-    `file_tracking`/`get_changed_files` invalidation logic.
-
-    Returns {"stale": True, "changed_files": [...]} on mismatch,
-    otherwise {"stale": False, "changed_files": []}.
-    """
-    stored_fp = frontmatter.get("mtime_fingerprint", "")
-    current_fp = _compute_mtime_fingerprint(project_dir)
-
-    if not stored_fp or stored_fp != current_fp:
-        changed: list[str] = []
-        if stored_fp:
-            for fp in sorted(project_dir.glob("*.jsonl")):
-                try:
-                    changed.append(fp.name)
-                except OSError:
-                    continue
-        return {"stale": True, "changed_files": changed}
-
-    return {"stale": False, "changed_files": []}
-
-
-def _mark_model_stale(model_file: Path) -> None:
-    """Set stale: true in the model's frontmatter without touching the body."""
-    text = _read_markdown(model_file)
-    if "stale: false" in text:
-        new_text = text.replace("stale: false", "stale: true", 1)
-        _write_markdown(model_file, new_text)
-    elif "stale: true" not in text:
-        lines = text.splitlines()
-        for i, line in enumerate(lines):
-            if line.strip() == "---":
-                lines.insert(i + 1, "stale: true")
-                break
-        _write_markdown(model_file, "\n".join(lines))
 
 
 # ---------------------------------------------------------------------------
