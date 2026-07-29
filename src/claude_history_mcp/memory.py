@@ -23,6 +23,7 @@ from typing import Any
 
 from .search import SearchEngine
 from .utils import scrub_surrogates
+from .memory_engine import MemoryDecayEngine
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,16 @@ _NAME_RE = re.compile(r"^name:\s*(.+)$", re.MULTILINE)
 _SCOPE_RE = re.compile(r"^scope:\s*(.+)$", re.MULTILINE)
 _STALE_RE = re.compile(r"^stale:\s*(true|false)$", re.MULTILINE)
 _LAST_REFRESHED_RE = re.compile(r"^last_refreshed:\s*(.+)$", re.MULTILINE)
+
+# Global decay engine instance (per-process, like _engine in server.py)
+_decay_engine: MemoryDecayEngine | None = None
+
+
+def _get_decay_engine() -> MemoryDecayEngine:
+    global _decay_engine
+    if _decay_engine is None:
+        _decay_engine = MemoryDecayEngine()
+    return _decay_engine
 
 
 def _claude_projects_root() -> Path:
@@ -236,6 +247,17 @@ def _retain_note(
         _write_markdown(note_path, full)
         _update_memory_index(project_dir, safe_name, description)
 
+    # Register in decay engine (turn = days since epoch for monotonic advancement)
+    turn = int(datetime.now(UTC).timestamp() // 86400)
+    is_foundational = note_type in ("decision", "bug")  # decisions/bugs never decay
+    engine = _get_decay_engine()
+    engine.register(
+        note_id=safe_name,
+        content=content,
+        current_turn=turn,
+        is_foundational=is_foundational,
+    )
+
     return {
         "name": safe_name,
         "path": str(note_path),
@@ -318,6 +340,12 @@ def reflect(
         notes = _list_memory_notes(project_dir)
         if note_names:
             notes = [n for n in notes if n["name"] in note_names]
+
+        # Advance decay engine turn and evict stale notes
+        turn = int(datetime.now(UTC).timestamp() // 86400)
+        decay_engine = _get_decay_engine()
+        decay_engine.step(turn)
+
         for note in notes[:10]:
             text = _read_markdown(Path(note["path"]))
             front = _parse_frontmatter(text)
@@ -326,6 +354,8 @@ def reflect(
                 if _FRONTMATTER_RE.search(text)
                 else text
             )
+            # Record recall for this note (boosts stability)
+            decay_engine.recall(note["name"], turn)
             evidence.append(
                 {
                     "type": "memory_note",

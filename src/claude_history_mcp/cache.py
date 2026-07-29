@@ -291,7 +291,7 @@ class CacheManager:
     def upsert_session(self, project_id: int, session_id: str, **kwargs: object) -> int:
         conn = self.connect()
         fields = ["project_id", "session_id"]
-        values: list = [project_id, session_id]
+        values: list[object] = [project_id, session_id]
         update_clauses = []
         for key, val in kwargs.items():
             if val is not None and key in _ALLOWED_SESSION_COLUMNS:

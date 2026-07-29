@@ -82,6 +82,15 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 The entry point name (`claude-history-mcp`) must match exactly — it's the `[project.scripts]` key in `pyproject.toml`.
 
+### Recent Fixes (2026-07-29)
+
+1. **Memory decay engine** — Added Ebbinghaus forgetting-curve based memory decay to `memory_retain` / `memory_reflect`:
+   - `MemoryDecayEngine` class in `memory_engine.py` (vendored from Emmimal/memory-decay-engine, MIT, zero deps)
+   - Retention: `R = e^(-t / S)` where `S` grows with each recall: `S *= (1 + ln(1 + n))`
+   - Auto-eviction on `memory_reflect` when `R < 0.20`
+   - `note_type="decision"` or `"bug"` → `is_foundational=True` → never decays
+   - 13 new tests in `tests/test_memory_decay.py`
+
 ### Recent Fixes (2026-07-27)
 
 1. **FTS5 full-text search** — SQLite FTS5 virtual table (`messages_fts`) with `unicode61` tokenizer for efficient search. Falls back to `LIKE` if FTS5 unavailable. Triggers keep index in sync with messages table.

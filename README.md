@@ -12,16 +12,16 @@
 
 ## Features
 
-| Feature                    | Description                                                                                          |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Full-text search**       | Search across all session messages, tool outputs, and history commands                               |
-| **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                           |
-| **Incremental parsing**    | Only re-parses files that changed (mtime-based SQLite cache)                                         |
-| **7 MCP tools**            | Search, list, filter, analyze — with pagination on all list/search tools                             |
-| **Cost analytics**         | Estimate token costs, usage trends, and model breakdowns                                             |
-| **Memory notes**           | Retain and reflect on markdown memory notes grounded in sessions                                    |
-| **Zero config**            | Points at your existing `~/.claude/` data — no setup, no API keys, no cloud                          |
-| **Surrogate-safe**         | Handles real-world JSONL edge cases (missing timestamps, truncated tool names, surrogate characters) |
+| Feature                    | Description                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Full-text search**       | Search across all session messages, tool outputs, and history commands                                |
+| **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                            |
+| **Incremental parsing**    | Only re-parses files that changed (mtime-based SQLite cache)                                          |
+| **7 MCP tools**            | Search, list, filter, analyze — with pagination on all list/search tools                              |
+| **Cost analytics**         | Estimate token costs, usage trends, and model breakdowns                                              |
+| **Smart memory decay**     | Ebbinghaus forgetting curve with spaced-repetition — notes you recall survive, stale notes auto-evict |
+| **Zero config**            | Points at your existing `~/.claude/` data — no setup, no API keys, no cloud                           |
+| **Surrogate-safe**         | Handles real-world JSONL edge cases (missing timestamps, truncated tool names, surrogate characters)  |
 
 ---
 
@@ -40,18 +40,39 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 ## What You Can Ask
 
-| Question                                            | Tool                     | Example                                                   |
-| --------------------------------------------------- | ------------------------ | --------------------------------------------------------- |
-| "Find sessions about payment processing"            | `search_messages`        | `search_messages(query="payment", role="user")`           |
-| "Show me the session where I debugged the timeout"  | `get_session_transcript` | `get_session_transcript(session_id="abc123...")`          |
-| "Search what I typed in the terminal"               | `search_history`         | `search_history(query="terraform apply")`                 |
-| "List my projects and recent sessions"              | `list_sessions`          | `list_sessions()`                                         |
-| "Sessions in the auth project from last month"      | `list_sessions`          | `list_sessions(project="auth", from_date="last month")`   |
-| "What models am I using and how much do they cost?" | `get_model_usage`        | `get_model_usage()`                                       |
-| "Save a new memory note"                            | `memory_retain`          | `memory_retain(project="auth", statement="...")`          |
-| "Synthesize evidence for a query"                   | `memory_reflect`         | `memory_reflect(project="auth", query="...")`             |
+| Question                                            | Tool                     | Example                                                 |
+| --------------------------------------------------- | ------------------------ | ------------------------------------------------------- |
+| "Find sessions about payment processing"            | `search_messages`        | `search_messages(query="payment", role="user")`         |
+| "Show me the session where I debugged the timeout"  | `get_session_transcript` | `get_session_transcript(session_id="abc123...")`        |
+| "Search what I typed in the terminal"               | `search_history`         | `search_history(query="terraform apply")`               |
+| "List my projects and recent sessions"              | `list_sessions`          | `list_sessions()`                                       |
+| "Sessions in the auth project from last month"      | `list_sessions`          | `list_sessions(project="auth", from_date="last month")` |
+| "What models am I using and how much do they cost?" | `get_model_usage`        | `get_model_usage()`                                     |
+| "Save a new memory note"                            | `memory_retain`          | `memory_retain(project="auth", statement="...")`        |
+| "Synthesize evidence for a query"                   | `memory_reflect`         | `memory_reflect(project="auth", query="...")`           |
 
 All list/search tools support `offset` for cursor-based pagination.
+
+---
+
+## Smart Memory Decay (Ebbinghaus Forgetting Curve)
+
+The `memory_retain` / `memory_reflect` tools now include an automatic decay engine
+based on the **Ebbinghaus forgetting curve** with **spaced-repetition reinforcement**:
+
+| Concept                | Behavior                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| **Retention score**    | `R = e^(-elapsed_turns / stability)` — decays exponentially over time                         |
+| **Recall boost**       | Each `memory_reflect` call recalls matching notes → `stability *= (1 + ln(1 + recall_count))` |
+| **Eviction**           | Notes with `R < 0.20` are auto-pruned on next `memory_reflect`                                |
+| **Foundational notes** | `note_type="decision"` or `"bug"` → `is_foundational=True` → **never evict**                  |
+
+**Practical effect:**
+
+- Store a decision (`note_type="decision"`) → persists forever
+- Store a workaround (`note_type="observation"`) → auto-evicted if never recalled
+- Frequently recalled notes get stronger retention (spaced-repetition effect)
+- No manual cleanup needed — the engine handles it on every `reflect` call
 
 ---
 
