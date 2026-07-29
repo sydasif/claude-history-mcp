@@ -69,7 +69,8 @@ def _project_display_to_path(display_name: str) -> Path | None:
 def _read_markdown(path: Path) -> str:
     if not path.exists():
         return ""
-    return scrub_surrogates(path.read_text(encoding="utf-8"))
+    content = path.read_text(encoding="utf-8")
+    return scrub_surrogates(content) or ""
 
 
 def _write_markdown(path: Path, content: str) -> None:
