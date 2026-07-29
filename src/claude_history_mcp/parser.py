@@ -111,6 +111,24 @@ def extract_tool_names(content: list[Any] | None) -> list[str]:
     return [item.name for item in content if isinstance(item, ToolUseContent)]
 
 
+def extract_tool_inputs(content: list[Any] | None) -> list[dict[str, Any]]:
+    """Extract tool inputs with file paths and arguments from content blocks.
+
+    Args:
+        content: List of content items.
+
+    Returns:
+        List of tool input objects with name and input dict.
+    """
+    if not content:
+        return []
+    return [
+        {"name": item.name, "input": item.input}
+        for item in content
+        if isinstance(item, ToolUseContent)
+    ]
+
+
 def extract_tool_result_text(content: str | list[dict[str, Any]] | None) -> str:
     """Normalize tool_result content to a string.
 

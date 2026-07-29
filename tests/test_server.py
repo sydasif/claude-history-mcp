@@ -68,6 +68,87 @@ def isolated_home(tmp_path, monkeypatch):
         )
         + "\n"
     )
+    # Session with tool_use blocks for file change tracking tests
+    (claude_dir / "sess-tools-abc12345.jsonl").write_text(
+        "\n".join(
+            json.dumps(line)
+            for line in [
+                {
+                    "type": "assistant",
+                    "uuid": "t1",
+                    "sessionId": "sess-tools-abc12345",
+                    "parentUuid": None,
+                    "isSidechain": False,
+                    "cwd": "/tmp/demo",
+                    "version": "1.0",
+                    "timestamp": "2026-07-23T11:00:00Z",
+                    "message": {
+                        "id": "m-t1",
+                        "type": "message",
+                        "role": "assistant",
+                        "model": "claude-sonnet-5",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "tool-read-1",
+                                "name": "Read",
+                                "input": {"file_path": "/tmp/demo/app.py"},
+                            },
+                            {
+                                "type": "tool_use",
+                                "id": "tool-write-1",
+                                "name": "Write",
+                                "input": {
+                                    "file_path": "/tmp/demo/new_file.txt",
+                                    "content": "file content here",
+                                },
+                            },
+                        ],
+                        "usage": {"input_tokens": 10, "output_tokens": 10},
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "uuid": "t2",
+                    "sessionId": "sess-tools-abc12345",
+                    "parentUuid": "t1",
+                    "isSidechain": False,
+                    "cwd": "/tmp/demo",
+                    "version": "1.0",
+                    "timestamp": "2026-07-23T11:01:00Z",
+                    "message": {
+                        "id": "m-t2",
+                        "type": "message",
+                        "role": "assistant",
+                        "model": "claude-sonnet-5",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "tool-edit-1",
+                                "name": "Edit",
+                                "input": {
+                                    "file_path": "/tmp/demo/app.py",
+                                    "old_string": "def old():",
+                                    "new_string": "def new():",
+                                },
+                            },
+                            {
+                                "type": "tool_use",
+                                "id": "tool-bash-1",
+                                "name": "Bash",
+                                "input": {
+                                    "command": "ls -la /tmp/demo",
+                                    "description": "List files",
+                                },
+                            },
+                        ],
+                        "usage": {"input_tokens": 10, "output_tokens": 10},
+                    },
+                },
+            ]
+        )
+        + "\n"
+    )
     # Reset the module-level cached engine so it re-initializes against the
     # isolated HOME for each test.
     import claude_history_mcp.server as server_module
@@ -83,7 +164,7 @@ async def test_list_sessions():
 
     async with Client(mcp) as client:
         result = await client.call_tool("list_sessions", {"limit": 5})
-        assert len(result.data) == 1
+        assert len(result.data) == 2  # Two test sessions
 
 
 @pytest.mark.asyncio
@@ -157,3 +238,104 @@ async def test_new_analytics_tools():
         assert len(res_totals.data) == 1
         assert "breakdown" in res_totals.data[0]
         assert "total_cost_usd" in res_totals.data[0]
+
+
+@pytest.mark.asyncio
+async def test_get_file_changes():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_file_changes", {"session_id": "sess-tools-abc12345"}
+        )
+        assert result.data is not None
+        data = result.data
+        assert data["session_id"] == "sess-tools-abc12345"
+        assert "files" in data
+        assert "summary" in data
+
+        # Should have 3 unique file paths: app.py, new_file.txt, and bash command
+        assert data["summary"]["files_modified"] >= 3
+        assert data["summary"]["writes"] >= 1
+        assert data["summary"]["edits"] >= 1
+        assert data["summary"]["reads"] >= 1
+        assert data["summary"]["bash_commands"] >= 1
+
+        # Check specific files are tracked
+        files = data["files"]
+        assert "/tmp/demo/app.py" in files
+        assert "/tmp/demo/new_file.txt" in files
+        # app.py should have both Read and Edit
+        app_ops = [op["tool"] for op in files["/tmp/demo/app.py"]]
+        assert "Read" in app_ops
+        assert "Edit" in app_ops
+
+
+@pytest.mark.asyncio
+async def test_get_file_changes_short_session_id():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("get_file_changes", {"session_id": "short"})
+        assert result.data is not None
+        assert "error" in result.data
+        assert "8 characters" in result.data["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_file_changes():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("search_file_changes", {"file_path": "app.py"})
+        assert result.data is not None
+        data = result.data
+        assert data["file_path"] == "app.py"
+        assert "sessions" in data
+        assert "total_sessions" in data
+        assert data["total_sessions"] >= 1
+
+        # Find our test session
+        session_ids = [s["session_id"] for s in data["sessions"]]
+        assert "sess-tools-abc12345" in session_ids
+
+
+@pytest.mark.asyncio
+async def test_get_tool_inputs():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_tool_inputs", {"session_id": "sess-tools-abc12345"}
+        )
+        assert result.data is not None
+        data = result.data
+        assert data["session_id"] == "sess-tools-abc12345"
+        assert "tool_inputs" in data
+        assert "count" in data
+        assert data["count"] == 4  # Read, Write, Edit, Bash
+
+        # Check Write has file_path
+        writes = [t for t in data["tool_inputs"] if t["tool"] == "Write"]
+        assert len(writes) == 1
+        assert writes[0]["file_path"] == "/tmp/demo/new_file.txt"
+
+        # Check Bash has command
+        bash = [t for t in data["tool_inputs"] if t["tool"] == "Bash"]
+        assert len(bash) == 1
+        assert bash[0]["command"] == "ls -la /tmp/demo"
+
+
+@pytest.mark.asyncio
+async def test_get_tool_inputs_filtered():
+    from claude_history_mcp.server import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_tool_inputs",
+            {"session_id": "sess-tools-abc12345", "tool_name": "Write"},
+        )
+        assert result.data is not None
+        data = result.data
+        assert data["count"] >= 1
+        assert all(t["tool"] == "Write" for t in data["tool_inputs"])

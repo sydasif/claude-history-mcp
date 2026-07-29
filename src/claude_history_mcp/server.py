@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -278,6 +279,223 @@ def get_health_resource() -> str:
         )
     except Exception as e:
         return f"Health check failed: {e}"
+
+
+@mcp.tool
+def get_file_changes(session_id: str) -> dict[str, Any]:
+    """Get all file modifications in a session, grouped by file path.
+
+    Returns which files were Read, Written, Edited, or executed via Bash,
+    with timestamps and operation details.
+
+    Args:
+        session_id: Session ID (full or prefix, minimum 8 characters)
+    """
+    try:
+        if len(session_id) < 8:
+            return {"error": "session_id must be at least 8 characters"}
+        if not _SESSION_ID_PATTERN.match(session_id):
+            return {"error": "Invalid session_id format"}
+
+        engine = _get_engine()
+        messages = engine.cache.get_messages_by_tool(session_id)
+
+        files: dict[str, list[dict[str, Any]]] = {}
+        summary = {
+            "reads": 0,
+            "writes": 0,
+            "edits": 0,
+            "bash_commands": 0,
+            "other_tools": 0,
+        }
+
+        for msg in messages:
+            tool_names = (
+                json.loads(msg.get("tool_names", "[]")) if msg.get("tool_names") else []
+            )
+            tool_inputs = (
+                json.loads(msg.get("tool_inputs", "[]"))
+                if msg.get("tool_inputs")
+                else []
+            )
+            timestamp = msg.get("timestamp", "")
+
+            for ti in tool_inputs:
+                tool_name = ti.get("name", "")
+                tool_input = ti.get("input", {})
+                file_path = None
+
+                if tool_name in ("Read", "Write", "Edit"):
+                    file_path = tool_input.get("file_path")
+                elif tool_name == "Bash":
+                    file_path = f"[bash] {tool_input.get('command', '')[:100]}"
+                    summary["bash_commands"] += 1
+                elif tool_name == "Grep":
+                    file_path = tool_input.get("path", ".")
+                elif tool_name == "LSP":
+                    file_path = tool_input.get("filePath")
+
+                if file_path:
+                    if file_path not in files:
+                        files[file_path] = []
+
+                    op = {"tool": tool_name, "timestamp": timestamp}
+
+                    if tool_name == "Write":
+                        content = tool_input.get("content", "")
+                        op["size"] = len(content)
+                        summary["writes"] += 1
+                    elif tool_name == "Edit":
+                        op["old_string"] = tool_input.get("old_string", "")[:100]
+                        op["new_string"] = tool_input.get("new_string", "")[:100]
+                        summary["edits"] += 1
+                    elif tool_name == "Read":
+                        summary["reads"] += 1
+                    elif tool_name == "Bash":
+                        summary["bash_commands"] += 1
+                    else:
+                        summary["other_tools"] += 1
+
+                    files[file_path].append(op)
+
+        return {
+            "session_id": session_id,
+            "files": files,
+            "summary": {
+                "files_modified": len(files),
+                **summary,
+            },
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def search_file_changes(
+    file_path: str,
+    project: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Find all sessions that modified a specific file.
+
+    Args:
+        file_path: File path to search for (partial match)
+        project: Filter by project path or name (optional)
+        limit: Maximum results to return (default 50)
+    """
+    try:
+        engine = _get_engine()
+        project_id = None
+        if project:
+            projects = engine.cache.get_all_projects()
+            for p in projects:
+                if (
+                    project.lower() in p["project_path"].lower()
+                    or project.lower() in (p.get("display_name") or "").lower()
+                ):
+                    project_id = p["id"]
+                    break
+
+        messages = engine.cache.search_tool_inputs(file_path, project_id)
+
+        sessions: dict[str, dict[str, Any]] = {}
+        for msg in messages[:limit]:
+            sid = msg.get("session_id", "")
+            if sid not in sessions:
+                sessions[sid] = {
+                    "session_id": sid,
+                    "project": msg.get("display_name", ""),
+                    "project_path": msg.get("project_path", ""),
+                    "operations": [],
+                }
+
+            tool_inputs = (
+                json.loads(msg.get("tool_inputs", "[]"))
+                if msg.get("tool_inputs")
+                else []
+            )
+            for ti in tool_inputs:
+                if file_path.lower() in json.dumps(ti.get("input", {})).lower():
+                    sessions[sid]["operations"].append(
+                        {
+                            "tool": ti.get("name", ""),
+                            "timestamp": msg.get("timestamp", ""),
+                            "input_summary": {
+                                k: str(v)[:100] for k, v in ti.get("input", {}).items()
+                            },
+                        }
+                    )
+
+        return {
+            "file_path": file_path,
+            "sessions": list(sessions.values()),
+            "total_sessions": len(sessions),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+def get_tool_inputs(
+    session_id: str,
+    tool_name: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Get all tool inputs for a session, optionally filtered by tool name.
+
+    Returns file paths, commands, and arguments for each tool invocation.
+
+    Args:
+        session_id: Session ID (full or prefix, minimum 8 characters)
+        tool_name: Filter by specific tool name (e.g., "Write", "Edit", "Bash")
+        limit: Maximum results to return (default 100)
+    """
+    try:
+        if len(session_id) < 8:
+            return {"error": "session_id must be at least 8 characters"}
+        if not _SESSION_ID_PATTERN.match(session_id):
+            return {"error": "Invalid session_id format"}
+
+        engine = _get_engine()
+        messages = engine.cache.get_messages_by_tool(session_id, tool_name)
+
+        tool_inputs = []
+        for msg in messages[:limit]:
+            inputs = (
+                json.loads(msg.get("tool_inputs", "[]"))
+                if msg.get("tool_inputs")
+                else []
+            )
+            timestamp = msg.get("timestamp", "")
+            for ti in inputs:
+                # Filter by tool_name if specified
+                if tool_name and ti.get("name") != tool_name:
+                    continue
+
+                entry = {
+                    "tool": ti.get("name", ""),
+                    "timestamp": timestamp,
+                }
+
+                tool_input = ti.get("input", {})
+                if tool_input.get("file_path"):
+                    entry["file_path"] = tool_input["file_path"]
+                if tool_input.get("command"):
+                    entry["command"] = tool_input["command"]
+                if tool_input.get("path"):
+                    entry["path"] = tool_input["path"]
+                if tool_input.get("query"):
+                    entry["query"] = tool_input["query"]
+
+                tool_inputs.append(entry)
+
+        return {
+            "session_id": session_id,
+            "tool_inputs": tool_inputs,
+            "count": len(tool_inputs),
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def main() -> None:

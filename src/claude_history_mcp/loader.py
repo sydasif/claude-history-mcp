@@ -10,6 +10,7 @@ from .models import SILENT_SKIP_TYPES
 from .parser import (
     create_entry,
     extract_text,
+    extract_tool_inputs,
     extract_tool_names,
     get_entry_text,
     get_entry_tokens,
@@ -110,7 +111,9 @@ def load_jsonl_file(
 
             # Build searchable record
             text = get_entry_text(entry)
-            tools = extract_tool_names(getattr(msg, "content", None)) if msg else []
+            content = getattr(msg, "content", None) if msg else None
+            tools = extract_tool_names(content)
+            tool_inputs = extract_tool_inputs(content)
             model = None
             is_error = 0
             if entry.type == "assistant":
@@ -138,6 +141,7 @@ def load_jsonl_file(
                     "is_sidechain": 1 if getattr(entry, "isSidechain", False) else 0,
                     "content_text": text,
                     "tool_names": json.dumps(tools),
+                    "tool_inputs": json.dumps(tool_inputs),
                     "model": model,
                     "tokens_input": inp,
                     "tokens_output": out,

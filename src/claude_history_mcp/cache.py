@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS messages (
     is_sidechain INTEGER DEFAULT 0,
     content_text TEXT,
     tool_names TEXT,
+    tool_inputs TEXT,  -- JSON array of tool inputs with file paths and arguments
     model TEXT,
     tokens_input INTEGER DEFAULT 0,
     tokens_output INTEGER DEFAULT 0,
@@ -82,6 +83,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(entry_type);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_messages_text ON messages(content_text);
 CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(project_id);
+CREATE INDEX IF NOT EXISTS idx_messages_tool_inputs ON messages(tool_inputs);
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_history_project ON history_commands(project);
 """
@@ -163,9 +165,29 @@ class CacheManager:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
+            self._migrate_schema()
             self._conn.executescript(SCHEMA)
             self._setup_fts()
         return self._conn
+
+    def _migrate_schema(self) -> None:
+        """Add missing columns to existing tables."""
+        if self._conn is None:
+            return
+        # Add tool_inputs column to messages table if missing
+        try:
+            self._conn.execute("SELECT tool_inputs FROM messages LIMIT 1")
+        except sqlite3.OperationalError:
+            # Table might not exist yet - that's fine, schema will create it
+            try:
+                self._conn.execute("SELECT * FROM messages LIMIT 1")
+                # Table exists but column doesn't - add it
+                logger.info("Adding tool_inputs column to messages table")
+                self._conn.execute("ALTER TABLE messages ADD COLUMN tool_inputs TEXT")
+                self._conn.commit()
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet - schema will create it
+                pass
 
     def _setup_fts(self) -> None:
         """Set up FTS5 virtual table and triggers if not present."""
@@ -370,8 +392,8 @@ class CacheManager:
         conn = self.connect()
         conn.executemany(
             "INSERT INTO messages (project_id, session_id, file_name, entry_type, timestamp, "
-            "uuid, parent_uuid, is_sidechain, content_text, tool_names, model, tokens_input, "
-            "tokens_output, is_error, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "uuid, parent_uuid, is_sidechain, content_text, tool_names, tool_inputs, model, "
+            "tokens_input, tokens_output, is_error, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     project_id,
@@ -384,6 +406,7 @@ class CacheManager:
                     e.get("is_sidechain", 0),
                     e.get("content_text", ""),
                     e.get("tool_names", ""),
+                    e.get("tool_inputs", ""),
                     e.get("model", ""),
                     e.get("tokens_input", 0),
                     e.get("tokens_output", 0),
@@ -601,4 +624,32 @@ class CacheManager:
         if session_id:
             sql += " AND session_id=?"
             params.append(session_id)
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_messages_by_tool(
+        self, session_id: str, tool_name: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Get messages with tool inputs for a session, optionally filtered by tool name."""
+        conn = self.connect()
+        sql = "SELECT * FROM messages WHERE session_id=? AND tool_names IS NOT NULL AND tool_names != ''"
+        params: list[Any] = [session_id]
+        if tool_name:
+            sql += " AND tool_names LIKE ?"
+            params.append(f'%"{tool_name}"%')
+        sql += " ORDER BY id ASC"
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def search_tool_inputs(
+        self, file_path: str, project_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Search for messages that reference a specific file path in tool inputs."""
+        conn = self.connect()
+        sql = "SELECT m.*, p.project_path, p.display_name FROM messages m "
+        sql += "JOIN projects p ON m.project_id=p.id "
+        sql += "WHERE m.tool_inputs IS NOT NULL AND m.tool_inputs LIKE ?"
+        params: list[Any] = [f"%{file_path}%"]
+        if project_id:
+            sql += " AND m.project_id=?"
+            params.append(project_id)
+        sql += " ORDER BY m.timestamp DESC"
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
