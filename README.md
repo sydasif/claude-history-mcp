@@ -17,9 +17,9 @@
 | **Full-text search**       | Search across all session messages, tool outputs, and history commands                               |
 | **Natural language dates** | Filter by "yesterday", "last week", "March 2026" — powered by `dateparser`                           |
 | **Incremental parsing**    | Only re-parses files that changed (mtime-based SQLite cache)                                         |
-| **10 MCP tools**           | Search, list, filter, analyze — with pagination on all list/search tools                             |
-| **Cost analytics**         | Estimate token costs, usage trends, model breakdowns, and tool frequency                             |
-| **Session hierarchy**      | Tree view: projects → sessions → messages with glob pattern search                                   |
+| **7 MCP tools**            | Search, list, filter, analyze — with pagination on all list/search tools                             |
+| **Cost analytics**         | Estimate token costs, usage trends, and model breakdowns                                             |
+| **Memory notes**           | Retain and reflect on markdown memory notes grounded in sessions                                    |
 | **Zero config**            | Points at your existing `~/.claude/` data — no setup, no API keys, no cloud                          |
 | **Surrogate-safe**         | Handles real-world JSONL edge cases (missing timestamps, truncated tool names, surrogate characters) |
 
@@ -42,20 +42,14 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 | Question                                            | Tool                     | Example                                                   |
 | --------------------------------------------------- | ------------------------ | --------------------------------------------------------- |
-| "What did I work on last week?"                     | `list_recent_activity`   | `list_recent_activity(hours=168)`                         |
 | "Find sessions about payment processing"            | `search_messages`        | `search_messages(query="payment", role="user")`           |
 | "Show me the session where I debugged the timeout"  | `get_session_transcript` | `get_session_transcript(session_id="abc123...")`          |
-| "How many tokens did that refactoring cost?"        | `get_session_stats`      | `get_session_stats(session_id="abc123...")`               |
-| "What commands did I run to deploy?"                | `search_history`         | `search_history(query="terraform apply")`                 |
-| "List all my projects and their activity"           | `list_sessions`          | `list_sessions()`                                         |
+| "Search what I typed in the terminal"               | `search_history`         | `search_history(query="terraform apply")`                 |
+| "List my projects and recent sessions"              | `list_sessions`          | `list_sessions()`                                         |
 | "Sessions in the auth project from last month"      | `list_sessions`          | `list_sessions(project="auth", from_date="last month")`   |
 | "What models am I using and how much do they cost?" | `get_model_usage`        | `get_model_usage()`                                       |
-| "Which tools do I use most frequently?"             | `get_tool_usage`         | `get_tool_usage()`                                        |
-| "Show me the project hierarchy tree"                | `get_project_tree`       | `get_project_tree(project="auth")`                        |
-| "Get aggregated stats for a project"                | `get_project_stats`      | `get_project_stats(project="auth")`                       |
 | "Save a new memory note"                            | `memory_retain`          | `memory_retain(project="auth", statement="...")`          |
 | "Synthesize evidence for a query"                   | `memory_reflect`         | `memory_reflect(project="auth", query="...")`             |
-| "Get or create a mental model"                      | `memory_mental_model`    | `memory_mental_model(project="auth", source_query="...")` |
 
 All list/search tools support `offset` for cursor-based pagination.
 

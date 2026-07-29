@@ -68,7 +68,7 @@ All tools return `list[dict]` consistently — single results are wrapped in a l
 ### Recent Fixes (2026-07-24)
 
 1. **Library dependency** — Removed `claude-code-log` dependency; parsing is now handled by local Pydantic models and parser to eliminate 20+ transitive dependencies.
-2. **`get_recent_activity` limit parameter** — Added optional `limit` parameter (default 100) to prevent token overflow on large result sets
+2. **`list_recent_activity` limit parameter** — Added optional `limit` parameter (default 100) to prevent token overflow on large result sets
 3. **Timezone handling** — `parse_timestamp()` and `_parse_natural_date()` return naive UTC datetimes for consistent comparison
 4. **Silent skip types expanded** — Added `file-history-delta`, `pr-link` to skip list
 
@@ -81,12 +81,6 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 ```
 
 The entry point name (`claude-history-mcp`) must match exactly — it's the `[project.scripts]` key in `pyproject.toml`.
-
-### Recent Fixes (2026-07-25)
-
-1. **Pagination (offset)** — All list/search tools (`list_sessions_stats`, `search_messages`, `search_history`, `list_recent_activity`) now support `offset` parameter for cursor-based pagination
-2. **Prefix matching in list_session_stats** — `list_session_stats` now resolves session ID prefixes (min 8 chars), matching `list_session_transcript` behavior
-3. **Type safety** — Resolved all 59 pyright static analysis errors across source and tests; now runs at 0 errors, 0 warnings
 
 ### Recent Fixes (2026-07-27)
 
