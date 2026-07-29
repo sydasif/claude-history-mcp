@@ -1,5 +1,4 @@
 import json
-from datetime import datetime, timedelta, timezone
 
 from claude_history_mcp.cache import CacheManager
 from claude_history_mcp.search import SearchEngine
@@ -161,43 +160,6 @@ def test_get_session_nonexistent(tmp_path):
     assert engine.get_session("doesnotexist") is None
 
 
-def test_get_session_stats_token_counts(tmp_path):
-    engine = _engine(tmp_path)
-    pid = engine.cache.upsert_project("/a", "a")
-    engine.cache.upsert_session(
-        pid, "s1", total_input_tokens=100, total_output_tokens=50, message_count=2
-    )
-    stats = engine.get_session_stats("s1")
-    assert stats is not None
-    assert stats["total_input_tokens"] == 100
-    assert stats["total_output_tokens"] == 50
-
-
-def test_get_session_stats_tool_usage(tmp_path):
-    engine = _engine(tmp_path)
-    pid = engine.cache.upsert_project("/a", "a")
-    engine.cache.upsert_session(pid, "s1")
-    engine.cache.insert_messages(
-        pid,
-        "s1",
-        "s.jsonl",
-        [
-            {
-                "entry_type": "assistant",
-                "timestamp": None,
-                "uuid": "u1",
-                "content_text": "",
-                "tool_names": json.dumps(["Bash", "Bash", "Read"]),
-                "raw_json": "{}",
-            }
-        ],
-    )
-    stats = engine.get_session_stats("s1")
-    assert stats is not None
-    assert stats["tool_usage"]["Bash"] == 2
-    assert stats["tool_usage"]["Read"] == 1
-
-
 def test_search_history_finds_commands(tmp_path):
     engine = _engine(tmp_path)
     engine.cache.insert_history_commands(
@@ -211,62 +173,6 @@ def test_search_history_finds_commands(tmp_path):
         ]
     )
     assert len(engine.search_history("litellm")) == 1
-
-
-def test_get_recent_activity_includes_null_timestamps(tmp_path):
-    """Regression test: `WHERE m.timestamp >= ?` silently drops NULL
-    timestamps in SQL, contradicting spec 3.2's rule that timestamp-less
-    entries always survive date filtering."""
-    engine = _engine(tmp_path)
-    pid = engine.cache.upsert_project("/a", "a")
-    recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-    engine.cache.insert_messages(
-        pid,
-        "s1",
-        "s.jsonl",
-        [
-            {
-                "entry_type": "user",
-                "timestamp": recent,
-                "uuid": "u1",
-                "content_text": "recent one",
-                "raw_json": "{}",
-            },
-            {
-                "entry_type": "user",
-                "timestamp": None,
-                "uuid": "u2",
-                "content_text": "no timestamp",
-                "raw_json": "{}",
-            },
-        ],
-    )
-    result = engine.get_recent_activity(hours=24)
-    texts = {r["text_preview"] for r in result}
-    assert "recent one" in texts
-    assert "no timestamp" in texts
-
-
-def test_get_recent_activity_excludes_old(tmp_path):
-    engine = _engine(tmp_path)
-    pid = engine.cache.upsert_project("/a", "a")
-    old = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
-    engine.cache.insert_messages(
-        pid,
-        "s1",
-        "s.jsonl",
-        [
-            {
-                "entry_type": "user",
-                "timestamp": old,
-                "uuid": "u1",
-                "content_text": "old one",
-                "raw_json": "{}",
-            }
-        ],
-    )
-    result = engine.get_recent_activity(hours=24)
-    assert all(r["content_text"] != "old one" for r in result)
 
 
 def test_analytics_methods(tmp_path):
@@ -292,16 +198,6 @@ def test_analytics_methods(tmp_path):
         ],
     )
 
-    cost = engine.get_cost_estimate(project="My Project")
-    assert cost["total_input_tokens"] == 1000
-    assert cost["total_output_tokens"] == 500
-    assert cost["total_cost_usd"] > 0
-
     models = engine.get_model_usage(project="My Project")
     assert len(models) == 1
     assert models[0]["model"] == "claude-sonnet-5"
-
-    tools = engine.get_tool_usage(project="My Project")
-    tool_names = {t["tool_name"] for t in tools}
-    assert "Read" in tool_names
-    assert "Bash" in tool_names

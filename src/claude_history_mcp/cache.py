@@ -3,7 +3,6 @@
 Provides thread-safe CRUD operations with WAL mode and connection pooling.
 """
 
-import json
 import logging
 import sqlite3
 import threading
@@ -572,26 +571,6 @@ class CacheManager:
         }
 
     # --- Analytics & Aggregations ---
-    def get_usage_trends(
-        self, project_id: int | None = None, limit_days: int = 30
-    ) -> list[dict[str, Any]]:
-        """Get daily usage trends (messages, tokens) grouped by date."""
-        conn = self.connect()
-        sql = (
-            "SELECT date(timestamp) as day, "
-            "COUNT(*) as message_count, "
-            "COALESCE(SUM(tokens_input), 0) as input_tokens, "
-            "COALESCE(SUM(tokens_output), 0) as output_tokens "
-            "FROM messages WHERE timestamp IS NOT NULL"
-        )
-        params: list[Any] = []
-        if project_id:
-            sql += " AND project_id=?"
-            params.append(project_id)
-        sql += " GROUP BY day ORDER BY day DESC LIMIT ?"
-        params.append(limit_days)
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
-
     def get_model_usage(self, project_id: int | None = None) -> list[dict[str, Any]]:
         """Get usage breakdown grouped by model."""
         conn = self.connect()
@@ -609,29 +588,6 @@ class CacheManager:
         sql += " GROUP BY model ORDER BY message_count DESC"
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
-    def get_tool_usage(self, project_id: int | None = None) -> list[dict[str, Any]]:
-        """Get tool usage frequency across messages."""
-        conn = self.connect()
-        sql = "SELECT tool_names FROM messages WHERE tool_names IS NOT NULL AND tool_names != '[]'"
-        params: list[Any] = []
-        if project_id:
-            sql += " AND project_id=?"
-            params.append(project_id)
-        rows = conn.execute(sql, params).fetchall()
-
-        counts: dict[str, int] = {}
-        for r in rows:
-            try:
-                tools = json.loads(r["tool_names"])
-                for t in tools:
-                    counts[t] = counts.get(t, 0) + 1
-            except Exception:
-                pass
-        return [
-            {"tool_name": k, "count": v}
-            for k, v in sorted(counts.items(), key=lambda x: -x[1])
-        ]
-
     def get_cost_data(
         self, project_id: int | None = None, session_id: str | None = None
     ) -> list[dict[str, Any]]:
@@ -646,66 +602,3 @@ class CacheManager:
             sql += " AND session_id=?"
             params.append(session_id)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
-
-    # --- Project Tree ---
-    def get_project_tree(
-        self, project_id: int | None = None, limit_sessions: int = 50
-    ) -> list[dict[str, Any]]:
-        """Get hierarchical project tree: project → sessions → message summaries.
-
-        Args:
-            project_id: Optional project filter. If None, returns all projects.
-            limit_sessions: Max sessions per project (default 50).
-
-        Returns:
-            List of projects, each with nested sessions and message summaries.
-        """
-        conn = self.connect()
-        if project_id:
-            project_rows = conn.execute(
-                "SELECT * FROM projects WHERE id=? ORDER BY last_updated DESC",
-                (project_id,),
-            ).fetchall()
-        else:
-            project_rows = conn.execute(
-                "SELECT * FROM projects ORDER BY last_updated DESC"
-            ).fetchall()
-
-        result = []
-        for p in project_rows:
-            p_dict = dict(p)
-            # Get sessions for this project
-            session_rows = conn.execute(
-                "SELECT * FROM sessions WHERE project_id=? ORDER BY last_timestamp DESC LIMIT ?",
-                (p_dict["id"], limit_sessions),
-            ).fetchall()
-
-            sessions_list = []
-            for s in session_rows:
-                s_dict = dict(s)
-                # Get message summary for this session
-                msg_rows = conn.execute(
-                    "SELECT entry_type, COUNT(*) as count, "
-                    "COALESCE(SUM(tokens_input), 0) as input_tokens, "
-                    "COALESCE(SUM(tokens_output), 0) as output_tokens, "
-                    "MIN(timestamp) as first_msg, MAX(timestamp) as last_msg "
-                    "FROM messages WHERE session_id=? AND project_id=? GROUP BY entry_type",
-                    (s_dict["session_id"], p_dict["id"]),
-                ).fetchall()
-
-                session_summary = {
-                    "session_id": s_dict["session_id"],
-                    "summary": s_dict.get("summary"),
-                    "ai_title": s_dict.get("ai_title"),
-                    "first_timestamp": s_dict.get("first_timestamp"),
-                    "last_timestamp": s_dict.get("last_timestamp"),
-                    "message_count": s_dict.get("message_count", 0),
-                    "total_input_tokens": s_dict.get("total_input_tokens", 0),
-                    "total_output_tokens": s_dict.get("total_output_tokens", 0),
-                    "message_breakdown": [dict(r) for r in msg_rows],
-                }
-                sessions_list.append(session_summary)
-
-            p_dict["sessions"] = sessions_list
-            result.append(p_dict)
-        return result

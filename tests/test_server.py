@@ -98,21 +98,6 @@ async def test_search_messages():
 
 
 @pytest.mark.asyncio
-async def test_get_session_stats():
-    from claude_history_mcp.server import mcp
-
-    async with Client(mcp) as client:
-        sessions = await client.call_tool("list_sessions", {"limit": 1})
-        sid = sessions.data[0]["session_id"]
-        result = await client.call_tool("get_session_stats", {"session_id": sid})
-        # Just verify it returns valid stats structure
-        assert "message_count" in result.data[0]
-        assert "total_input_tokens" in result.data[0]
-        assert "total_output_tokens" in result.data[0]
-        assert result.data[0]["message_count"] > 0
-
-
-@pytest.mark.asyncio
 async def test_search_history_empty_is_fine():
     from claude_history_mcp.server import mcp
 
@@ -120,15 +105,6 @@ async def test_search_history_empty_is_fine():
         result = await client.call_tool(
             "search_history", {"query": "model", "limit": 5}
         )
-        assert isinstance(result.data, list)
-
-
-@pytest.mark.asyncio
-async def test_get_recent_activity():
-    from claude_history_mcp.server import mcp
-
-    async with Client(mcp) as client:
-        result = await client.call_tool("list_recent_activity", {"hours": 48})
         assert isinstance(result.data, list)
 
 
@@ -142,10 +118,11 @@ async def test_server_has_expected_tools():
         expected = [
             "list_sessions",
             "get_session_transcript",
-            "get_session_stats",
             "search_history",
             "search_messages",
-            "list_recent_activity",
+            "get_model_usage",
+            "memory_retain",
+            "memory_reflect",
         ]
         for name in expected:
             assert name in tool_names, f"Missing tool: {name}"
@@ -158,8 +135,6 @@ async def test_server_has_expected_resources():
     async with Client(mcp) as client:
         resources = await client.list_resources()
         resource_uris = [str(r.uri) for r in resources]
-        assert "claude://projects" in resource_uris
-        assert "claude://history" in resource_uris
         assert "claude://health" in resource_uris
 
 
@@ -171,11 +146,7 @@ async def test_new_analytics_tools():
         # Verify tools exist in list_tools
         tools = await client.list_tools()
         tool_names = [t.name for t in tools]
-        for expected in [
-            "get_model_usage",
-            "get_tool_usage",
-        ]:
-            assert expected in tool_names
+        assert "get_model_usage" in tool_names
 
         # Call them
         res_models = await client.call_tool("get_model_usage", {})
@@ -186,42 +157,3 @@ async def test_new_analytics_tools():
         assert len(res_totals.data) == 1
         assert "breakdown" in res_totals.data[0]
         assert "total_cost_usd" in res_totals.data[0]
-
-        res_tools = await client.call_tool("get_tool_usage", {})
-        assert isinstance(res_tools.data, list)
-
-
-@pytest.mark.asyncio
-async def test_new_tree_and_export_tools():
-    from claude_history_mcp.server import mcp
-
-    async with Client(mcp) as client:
-        # Verify tools exist
-        tools = await client.list_tools()
-        tool_names = [t.name for t in tools]
-        for expected in [
-            "get_project_tree",
-            "get_project_stats",
-            "memory_retain",
-            "memory_reflect",
-            "memory_mental_model",
-        ]:
-            assert expected in tool_names, f"Missing tool: {expected}"
-
-        # Test get_project_tree
-        res_tree = await client.call_tool("get_project_tree", {})
-        assert isinstance(res_tree.data, list)
-        if res_tree.data:
-            proj = res_tree.data[0]
-            assert "project_path" in proj
-            assert "sessions" in proj
-
-        # Test get_project_stats
-        proj_name = res_tree.data[0]["display_name"]
-        res_stats = await client.call_tool(
-            "get_project_stats", {"project": proj_name, "detail_level": "full"}
-        )
-        assert isinstance(res_stats.data, list)
-        assert len(res_stats.data) == 1
-        assert "project_path" in res_stats.data[0]
-        assert "session_count" in res_stats.data[0]

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 
-from .memory import mental_model, reflect, retain
+from .memory import reflect, retain
 
 _SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,128}$")
 
@@ -34,29 +34,6 @@ def _get_engine() -> SearchEngine:
 
         _engine = initialize()
     return _engine
-
-
-@mcp.tool
-def get_project_stats(
-    project: str,
-    detail_level: str = "basic",
-) -> list[dict[str, Any]]:
-    """Get aggregated statistics for a project.
-
-    Args:
-        project: Project path or display name (partial match)
-        detail_level: "basic" or "full".
-            - "basic": Returns only fields matching list_projects (default)
-            - "full": Returns all stats including session_count, unique_models, top_tools, etc.
-    """
-    try:
-        engine = _get_engine()
-        result = engine.get_project_stats(project=project, detail_level=detail_level)
-        if result is None:
-            return [{"error": f"Project not found: {project}"}]
-        return [result]
-    except Exception as e:
-        return [{"error": str(e)}]
 
 
 @mcp.tool
@@ -85,24 +62,6 @@ def list_sessions(
             limit=limit,
             offset=offset,
         )
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
-def get_project_tree(
-    project: str | None = None,
-    limit_sessions: int = 50,
-) -> list[dict[str, Any]]:
-    """Get hierarchical project tree: projects -> sessions -> message summaries.
-
-    Args:
-        project: Filter by project path or name (partial match)
-        limit_sessions: Max sessions per project (default 50)
-    """
-    try:
-        engine = _get_engine()
-        return engine.get_project_tree(project=project, limit_sessions=limit_sessions)
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -151,27 +110,6 @@ def get_session_transcript(
                         msg["raw_json"] = json.dumps(raw, ensure_ascii=False)
                     except Exception:
                         logger.exception("Failed to filter thinking blocks")
-        return [result]
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
-def get_session_stats(session_id: str) -> list[dict[str, Any]]:
-    """Get token usage, tool call counts, and duration for a session.
-
-    Args:
-        session_id: Session ID (full or prefix, minimum 8 characters)
-    """
-    try:
-        if len(session_id) < 8:
-            return [{"error": "session_id must be at least 8 characters"}]
-        if not _SESSION_ID_PATTERN.match(session_id):
-            return [{"error": "Invalid session_id format"}]
-        engine = _get_engine()
-        result = engine.get_session_stats(session_id)
-        if result is None:
-            return [{"error": f"Session not found: {session_id}"}]
         return [result]
     except Exception as e:
         return [{"error": str(e)}]
@@ -259,27 +197,6 @@ def search_messages(
 
 
 @mcp.tool
-def list_recent_activity(
-    hours: int = 24, limit: int = 100, offset: int = 0
-) -> list[dict[str, Any]]:
-    """Get recent Claude Code activity across all projects.
-
-    Shows the most recent messages (user prompts and assistant responses)
-    from the specified time window.
-
-    Args:
-        hours: Look back this many hours (default 24)
-        limit: Maximum results to return (default 100)
-        offset: Number of results to skip for pagination (default 0)
-    """
-    try:
-        engine = _get_engine()
-        return engine.get_recent_activity(hours=hours, limit=limit, offset=offset)
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
 def get_model_usage(
     project: str | None = None,
     include_totals: bool = False,
@@ -300,22 +217,6 @@ def get_model_usage(
         if isinstance(result, dict):
             return [result]
         return result
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-@mcp.tool
-def get_tool_usage(
-    project: str | None = None,
-) -> list[dict[str, Any]]:
-    """Get tool usage frequency ranking across messages.
-
-    Args:
-        project: Filter by project path or name
-    """
-    try:
-        engine = _get_engine()
-        return engine.get_tool_usage(project=project)
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -372,54 +273,6 @@ def memory_reflect(
         session_ids=session_ids,
         session_limit=session_limit,
     )
-
-
-@mcp.tool
-def memory_mental_model(
-    project: str,
-    source_query: str,
-) -> list[dict[str, Any]]:
-    """Return the pinned mental model for a project, creating it if missing.
-
-    A mental_model is a cached summary in memory/mental-models/ whose
-    source_query is used to detect staleness as new sessions arrive.
-
-    Args:
-        project: Project display name or path fragment.
-        source_query: The question this model answers.
-    """
-    return mental_model(project=project, source_query=source_query)
-
-
-@mcp.resource("claude://projects")
-def get_projects_resource() -> str:
-    """List of all Claude Code projects."""
-    engine = _get_engine()
-    projects = engine.list_projects()
-    if not projects:
-        return "No Claude Code projects found."
-    lines = ["# Claude Code Projects\n"]
-    for p in projects:
-        lines.append(f"- **{p.get('display_name', p.get('project_path', 'unknown'))}**")
-        lines.append(f"  Path: `{p.get('project_path', '')}`")
-        lines.append(f"  Messages: {p.get('total_messages', 0)}")
-        lines.append(
-            f"  Tokens: {p.get('total_input_tokens', 0)} in / {p.get('total_output_tokens', 0)} out"
-        )
-    return "\n".join(lines)
-
-
-@mcp.resource("claude://history")
-def get_history_resource() -> str:
-    """Recent command history."""
-    engine = _get_engine()
-    commands = engine.search_history(query="", limit=20)
-    if not commands:
-        return "No command history found."
-    lines = ["# Recent Claude Code Commands\n"]
-    for cmd in commands:
-        lines.append(f"- `{cmd.get('display', '')}` ({cmd.get('project', 'unknown')})")
-    return "\n".join(lines)
 
 
 @mcp.resource("claude://health")
