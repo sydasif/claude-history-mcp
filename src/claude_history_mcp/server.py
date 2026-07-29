@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 
+from .memory import mental_model, reflect, retain
+
 _SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,128}$")
 
 if TYPE_CHECKING:
@@ -316,6 +318,77 @@ def get_tool_usage(
         return engine.get_tool_usage(project=project)
     except Exception as e:
         return [{"error": str(e)}]
+
+
+@mcp.tool
+def memory_retain(
+    project: str,
+    statement: str,
+    description: str = "",
+    session_ids: list[str] | None = None,
+    note_type: str = "observation",
+    related: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Store a new memory note grounded in specific sessions.
+
+    Writes a markdown note to the project's memory/ directory with YAML
+    frontmatter, cites source sessions, and updates MEMORY.md index.
+
+    Args:
+        project: Project display name or path fragment.
+        statement: The natural language fact/decision/insight to remember.
+        description: One-line summary for the memory index. Defaults to first 120 chars.
+        session_ids: Session UUIDs that support this statement.
+        note_type: observation | world | experience | decision | bug.
+        related: Optional list of related note names or [[wikilink]] refs.
+    """
+    return retain(project, statement, description, session_ids, note_type, related)
+
+
+@mcp.tool
+def memory_reflect(
+    project: str,
+    query: str,
+    note_names: list[str] | None = None,
+    session_ids: list[str] | None = None,
+    session_limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Gather structured evidence for synthesis.
+
+    Returns an evidence bundle combining memory notes and JSONL turns.
+    Claude Code reasons over this bundle to produce a sourced answer.
+
+    Args:
+        project: Project display name or path fragment.
+        query: The question to gather evidence for.
+        note_names: Specific memory notes to include. None = all notes.
+        session_ids: Specific sessions to pull verbatim evidence from.
+        session_limit: Max sessions when session_ids is None.
+    """
+    return reflect(
+        project=project,
+        query=query,
+        note_names=note_names,
+        session_ids=session_ids,
+        session_limit=session_limit,
+    )
+
+
+@mcp.tool
+def memory_mental_model(
+    project: str,
+    source_query: str,
+) -> list[dict[str, Any]]:
+    """Return the pinned mental model for a project, creating it if missing.
+
+    A mental_model is a cached summary in memory/mental-models/ whose
+    source_query is used to detect staleness as new sessions arrive.
+
+    Args:
+        project: Project display name or path fragment.
+        source_query: The question this model answers.
+    """
+    return mental_model(project=project, source_query=source_query)
 
 
 @mcp.resource("claude://projects")

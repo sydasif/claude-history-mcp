@@ -202,6 +202,9 @@ async def test_new_tree_and_export_tools():
         for expected in [
             "get_project_tree",
             "get_project_stats",
+            "memory_retain",
+            "memory_reflect",
+            "memory_mental_model",
         ]:
             assert expected in tool_names, f"Missing tool: {expected}"
 
