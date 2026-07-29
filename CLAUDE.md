@@ -29,6 +29,7 @@ uv run python -m claude_history_mcp.server  # Run the MCP server directly
 - **cache.py** — SQLite with WAL mode, threading lock. 5 tables: `projects`, `sessions`, `messages`, `history_commands`, `file_tracking`. `recompute_project_stats()` rolls up session aggregates to parent project.
 - **search.py** — `SearchEngine` wraps `CacheManager` with natural-language date parsing (`dateparser`), prefix-based session-ID matching, and post-filtering for tool names and dates.
 - **models.py** — Re-exports library types (`TranscriptEntry`, `UserTranscriptEntry`, etc.) + MCP-specific response models (`SessionSummary`, `ProjectInfo`, `MessageResult`, etc.)
+- **memory.py** — Wraps project memory notes (`memory/`), providing `memory_retain`, `memory_reflect`, and `memory_mental_model` with mtime-based staleness fingerprinting.
 - **utils.py** — `scrub_surrogates()` handles lone U+D800–U+DFFF characters, `parse_timestamp()` handles ISO 8601 with/without Z suffix, path helpers.
 
 ### Module Dependencies
@@ -46,9 +47,9 @@ Defined in `pyproject.toml` as `claude-history-mcp` (dashes): calls `claude_hist
 
 ### MCP Tools & Resources
 
-10 tools, 3 resources — all defined in `server.py` with try/except wrappers returning `[{"error": str(e)}]` on failure:
+13 tools, 3 resources — all defined in `server.py` with try/except wrappers returning `[{"error": str(e)}]` on failure:
 
-- `list_sessions`, `search_messages`, `get_session_transcript`, `get_session_stats`, `search_history`, `list_recent_activity`, `get_model_usage(include_totals?, session_id?)`, `get_tool_usage`, `get_project_tree`, `get_project_stats(detail_level="basic|full")`
+- `list_sessions`, `search_messages`, `get_session_transcript`, `get_session_stats`, `search_history`, `list_recent_activity`, `get_model_usage(include_totals?, session_id?)`, `get_tool_usage`, `get_project_tree`, `get_project_stats(detail_level="basic|full")`, `memory_retain`, `memory_reflect`, `memory_mental_model`
 - Resources: `claude://projects`, `claude://history`, `claude://health`
 
 Tools accept natural-language date strings ("yesterday", "last week") via `dateparser`.
