@@ -14,7 +14,6 @@ from claude_history_mcp.models import (
     UserEntry,
     AssistantEntry,
     SILENT_SKIP_TYPES,
-    HistoryCommand,
 )
 
 
@@ -170,19 +169,6 @@ def test_content_item_discriminated_union():
     assert len(entry.message.content) == 2
     types = {type(c).__name__ for c in entry.message.content}
     assert types == {"TextContent", "ImageContent"}
-
-
-def test_history_command_from_dict():
-    hc = HistoryCommand.model_validate(
-        {
-            "display": "ls -la",
-            "pastedContents": {},
-            "timestamp": 1784532628943,
-            "project": "/home/zulu/litellm-proxy",
-            "sessionId": "a7431e9a-48bb-44c9-b2cf-84121bf94917",
-        }
-    )
-    assert hc.timestamp == 1784532628943
 
 
 def test_user_entry_missing_message_no_crash():

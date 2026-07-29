@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -98,18 +97,6 @@ def get_session_transcript(
                     "candidates": candidates,
                 }
             ]
-        # Filter thinking blocks if requested
-        if not include_thinking and "messages" in result:
-            for msg in result["messages"]:
-                if msg.get("entry_type") == "assistant":
-                    try:
-                        raw = json.loads(msg["raw_json"])
-                        content = raw.get("message", {}).get("content", [])
-                        filtered = [c for c in content if c.get("type") != "thinking"]
-                        raw["message"]["content"] = filtered
-                        msg["raw_json"] = json.dumps(raw, ensure_ascii=False)
-                    except Exception:
-                        logger.exception("Failed to filter thinking blocks")
         return [result]
     except Exception as e:
         return [{"error": str(e)}]

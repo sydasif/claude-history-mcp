@@ -31,9 +31,6 @@ _MEMORY_DIR = "memory"
 _MEMORY_INDEX = "MEMORY.md"
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---", re.DOTALL)
 _NAME_RE = re.compile(r"^name:\s*(.+)$", re.MULTILINE)
-_SCOPE_RE = re.compile(r"^scope:\s*(.+)$", re.MULTILINE)
-_STALE_RE = re.compile(r"^stale:\s*(true|false)$", re.MULTILINE)
-_LAST_REFRESHED_RE = re.compile(r"^last_refreshed:\s*(.+)$", re.MULTILINE)
 
 # Global decay engine instance (per-process, like _engine in server.py)
 _decay_engine: MemoryDecayEngine | None = None
@@ -151,19 +148,6 @@ def _update_memory_index(project_dir: Path, note_name: str, description: str) ->
     else:
         new = f"# Memory Index\n\n{entry}\n"
     _write_markdown(index, new)
-
-
-def _find_note_path(project_dir: Path, name: str) -> Path | None:
-    """Locate a memory note by its frontmatter name or filename stem."""
-    mdir = _memory_dir_for_project(project_dir)
-    for f in mdir.glob("*.md"):
-        if f.name == _MEMORY_INDEX:
-            continue
-        text = _read_markdown(f)
-        front = _parse_frontmatter(text)
-        if front.get("name", f.stem) == name:
-            return f
-    return None
 
 
 def _retain_note(
