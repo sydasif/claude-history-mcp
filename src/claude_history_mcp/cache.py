@@ -161,6 +161,9 @@ class CacheManager:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
+            # Memory-map the DB for faster reads and increase page cache
+            self._conn.execute("PRAGMA mmap_size=268435456")  # 256 MB
+            self._conn.execute("PRAGMA cache_size=-65536")  # 64 MB
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._migrate_schema()
@@ -443,13 +446,23 @@ class CacheManager:
         project_id: int | None = None,
         session_id: str | None = None,
         role: str | None = None,
+        tool_name: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """Full-text search across messages using FTS5 when available."""
         if getattr(self, "_fts_available", False) and query:
             try:
                 return self._search_messages_fts(
-                    query, project_id, session_id, role, limit
+                    query,
+                    project_id,
+                    session_id,
+                    role,
+                    tool_name,
+                    from_date,
+                    to_date,
+                    limit,
                 )
             except Exception:
                 logger.exception("FTS5 search failed, falling back to LIKE")
@@ -468,6 +481,16 @@ class CacheManager:
         if role:
             sql += " AND m.entry_type=?"
             params.append(role)
+        if tool_name:
+            sql += " AND EXISTS (SELECT 1 FROM json_each(m.tool_names) WHERE value = ?)"
+            params.append(tool_name)
+        if from_date:
+            sql += " AND datetime(m.timestamp) >= datetime(?)"
+            params.append(from_date)
+        if to_date:
+            sql += " AND datetime(m.timestamp) <= datetime(?)"
+            params.append(to_date)
+
         sql += " ORDER BY m.timestamp DESC LIMIT ?"
         params.append(limit)
         return [dict(r) for r in self.connect().execute(sql, params).fetchall()]
@@ -478,6 +501,9 @@ class CacheManager:
         project_id: int | None = None,
         session_id: str | None = None,
         role: str | None = None,
+        tool_name: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """FTS5-based message search."""
@@ -501,6 +527,16 @@ class CacheManager:
         if role:
             sql += " AND m.entry_type=?"
             params.append(role)
+        if tool_name:
+            sql += " AND EXISTS (SELECT 1 FROM json_each(m.tool_names) WHERE value = ?)"
+            params.append(tool_name)
+        if from_date:
+            sql += " AND datetime(m.timestamp) >= datetime(?)"
+            params.append(from_date)
+        if to_date:
+            sql += " AND datetime(m.timestamp) <= datetime(?)"
+            params.append(to_date)
+
         sql += " ORDER BY m.timestamp DESC LIMIT ?"
         params.append(limit)
         return [dict(r) for r in self.connect().execute(sql, params).fetchall()]

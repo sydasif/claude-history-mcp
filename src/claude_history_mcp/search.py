@@ -83,38 +83,23 @@ class SearchEngine:
         """Search messages with multiple filters and pagination."""
         project_id = self._resolve_project_id(project) if project else None
 
+        from_dt = (
+            self._parse_natural_date(from_date, start_of_day=True)
+            if from_date
+            else None
+        )
+        to_dt = self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+
         results = self.cache.search_messages(
             query=query,
             project_id=project_id,
             session_id=session_id,
             role=role,
+            tool_name=tool_name,
+            from_date=from_dt.isoformat() if from_dt else None,
+            to_date=to_dt.isoformat() if to_dt else None,
             limit=offset + limit,
         )
-
-        # Post-filter by tool_name and date (SQLite LIKE can't filter JSON tool_names)
-        if tool_name:
-            results = [
-                r for r in results if tool_name in (r.get("tool_names", "") or "")
-            ]
-        if from_date or to_date:
-            from_dt = (
-                self._parse_natural_date(from_date, start_of_day=True)
-                if from_date
-                else None
-            )
-            to_dt = (
-                self._parse_natural_date(to_date, end_of_day=True) if to_date else None
-            )
-            filtered = []
-            for r in results:
-                ts = parse_timestamp(r.get("timestamp"))
-                if ts:
-                    if from_dt and ts < from_dt:
-                        continue
-                    if to_dt and ts > to_dt:
-                        continue
-                filtered.append(r)
-            results = filtered
 
         # Transform results to include role and text_preview
         formatted_results = []
