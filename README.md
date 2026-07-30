@@ -56,6 +56,31 @@ claude mcp add claude-history --scope user -- uvx --from git+https://github.com/
 
 All list/search tools support `offset` for cursor-based pagination.
 
+## Tools Reference
+
+The server exposes 10 specialized MCP tools:
+
+1. **`list_sessions`** — List Claude Code sessions with summaries, timestamps, and token usage.
+   - _Args:_ `project` (str), `from_date` (str), `to_date` (str), `limit` (int), `offset` (int)
+2. **`get_session_transcript`** — Get the full conversation transcript for a session (including prompts, assistant responses, tool calls, and results).
+   - _Args:_ `session_id` (str, full or >=8 char prefix), `include_thinking` (bool)
+3. **`search_messages`** — Full-text search across all session messages with filters for role, tool name, and natural language dates.
+   - _Args:_ `query` (str), `project` (str), `session_id` (str), `role` (str), `tool_name` (str), `from_date` (str), `to_date` (str), `limit` (int), `offset` (int)
+4. **`search_history`** — Search global command history (`history.jsonl`).
+   - _Args:_ `query` (str), `project` (str), `from_date` (str), `to_date` (str), `limit` (int), `offset` (int)
+5. **`get_model_usage`** — Get usage breakdown grouped by model with cost estimations.
+   - _Args:_ `project` (str), `include_totals` (bool), `session_id` (str)
+6. **`get_file_changes`** — Get all file modifications in a session grouped by file path (reads, writes, edits, bash commands).
+   - _Args:_ `session_id` (str)
+7. **`search_file_changes`** — Find all sessions that modified a specific file path.
+   - _Args:_ `file_path` (str), `project` (str), `limit` (int)
+8. **`get_tool_inputs`** — Get all tool inputs for a session, optionally filtered by tool name.
+   - _Args:_ `session_id` (str), `tool_name` (str), `limit` (int)
+9. **`memory_retain`** — Store a new project memory note grounded in specific sessions.
+   - _Args:_ `project` (str), `statement` (str), `description` (str), `session_ids` (list[str]), `note_type` (str), `related` (list[str])
+10. **`memory_reflect`** — Gather structured evidence combining project memory notes and JSONL turns.
+    - _Args:_ `project` (str), `query` (str), `note_names` (list[str]), `session_ids` (list[str]), `session_limit` (int)
+
 ---
 
 ## Architecture
@@ -74,7 +99,7 @@ All list/search tools support `offset` for cursor-based pagination.
 │  └──────┬──────┘  └─────┬──────┘  └───────┬───────┘  │
 │         │               │                  │         │
 │  ┌──────┴───────────────┴──────────────────┴───────┐ │
-│  │              SQLite Cache Layer                 │ │
+│  │    Optimized SQLite Cache (WAL, mmap, JSON1)    │ │
 │  │  projects │ sessions │ messages │ history       │ │
 │  └─────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────┘
