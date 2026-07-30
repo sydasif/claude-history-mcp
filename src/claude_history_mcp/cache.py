@@ -59,8 +59,7 @@ CREATE TABLE IF NOT EXISTS messages (
     model TEXT,
     tokens_input INTEGER DEFAULT 0,
     tokens_output INTEGER DEFAULT 0,
-    is_error INTEGER DEFAULT 0,
-    raw_json TEXT NOT NULL
+    is_error INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS history_commands (
@@ -414,7 +413,7 @@ class CacheManager:
         conn.executemany(
             "INSERT INTO messages (project_id, session_id, file_name, entry_type, timestamp, "
             "uuid, parent_uuid, is_sidechain, content_text, tool_names, tool_inputs, model, "
-            "tokens_input, tokens_output, is_error, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "tokens_input, tokens_output, is_error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     project_id,
@@ -432,7 +431,6 @@ class CacheManager:
                     e.get("tokens_input", 0),
                     e.get("tokens_output", 0),
                     e.get("is_error", 0),
-                    e["raw_json"],
                 )
                 for e in entries
             ],

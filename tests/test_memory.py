@@ -74,7 +74,6 @@ def setup_scratch_home(tmp_path, monkeypatch):
                 "timestamp": "2026-07-28T10:00:00Z",
                 "uuid": "u1",
                 "content_text": "how do we configure proxy in litellm?",
-                "raw_json": "{}",
             },
             {
                 "entry_type": "assistant",
@@ -82,7 +81,6 @@ def setup_scratch_home(tmp_path, monkeypatch):
                 "uuid": "a1",
                 "content_text": "You can set litellm_settings in config.yaml.",
                 "tool_names": json.dumps(["Read"]),
-                "raw_json": "{}",
             },
         ],
     )

@@ -56,7 +56,6 @@ def test_search_messages_finds_text(tmp_path):
                 "timestamp": None,
                 "uuid": "u1",
                 "content_text": "litellm proxy setup",
-                "raw_json": "{}",
             }
         ],
     )
@@ -77,14 +76,12 @@ def test_search_messages_role_filter(tmp_path):
                 "timestamp": None,
                 "uuid": "u1",
                 "content_text": "hi",
-                "raw_json": "{}",
             },
             {
                 "entry_type": "assistant",
                 "timestamp": None,
                 "uuid": "u2",
                 "content_text": "hi",
-                "raw_json": "{}",
             },
         ],
     )
@@ -107,7 +104,6 @@ def test_search_messages_tool_name_filter(tmp_path):
                 "uuid": "u1",
                 "content_text": "running command",
                 "tool_names": json.dumps(["Bash"]),
-                "raw_json": "{}",
             },
             {
                 "entry_type": "assistant",
@@ -115,7 +111,6 @@ def test_search_messages_tool_name_filter(tmp_path):
                 "uuid": "u2",
                 "content_text": "running command",
                 "tool_names": json.dumps(["Read"]),
-                "raw_json": "{}",
             },
         ],
     )
@@ -137,7 +132,6 @@ def test_get_session_full_conversation(tmp_path):
                 "timestamp": None,
                 "uuid": "u1",
                 "content_text": "hi",
-                "raw_json": "{}",
             }
         ],
     )
@@ -193,7 +187,6 @@ def test_analytics_methods(tmp_path):
                 "model": "claude-sonnet-5",
                 "tokens_input": 1000,
                 "tokens_output": 500,
-                "raw_json": "{}",
             }
         ],
     )

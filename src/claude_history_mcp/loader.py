@@ -3,6 +3,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .cache import CacheManager
 from .discovery import discover_projects, _extract_display_name
@@ -16,6 +17,21 @@ from .parser import (
     get_entry_tokens,
 )
 from .utils import parse_timestamp, scrub_surrogates
+
+
+def _sanitize_tool_inputs(tool_inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Strip large file contents from tool inputs to save DB space."""
+    sanitized = []
+    for ti in tool_inputs:
+        inp = ti.get("input", {}).copy()
+        if "content" in inp:  # Write tool
+            inp["content"] = f"[{len(str(inp['content']))} chars omitted]"
+        if "old_string" in inp:  # Edit tool
+            inp["old_string"] = str(inp["old_string"])[:100]
+        if "new_string" in inp:
+            inp["new_string"] = str(inp["new_string"])[:100]
+        sanitized.append({"name": ti.get("name", ""), "input": inp})
+    return sanitized
 
 
 @dataclass(slots=True)
@@ -60,8 +76,6 @@ def load_jsonl_file(
             except json.JSONDecodeError:
                 errors += 1
                 continue
-
-            raw_line = line  # Preserve original JSON to avoid costly re-serialization
 
             # Skip known types we don't care about
             entry_type = data.get("type", "")
@@ -114,9 +128,11 @@ def load_jsonl_file(
 
             # Build searchable record
             text = get_entry_text(entry)
+            text = text[:4000]  # Truncate massive tool outputs to save space
+
             content = getattr(msg, "content", None) if msg else None
             tools = extract_tool_names(content)
-            tool_inputs = extract_tool_inputs(content)
+            tool_inputs = _sanitize_tool_inputs(extract_tool_inputs(content))
             model = None
             is_error = 0
             if entry.type == "assistant":
@@ -126,7 +142,6 @@ def load_jsonl_file(
                 if getattr(entry, "requestId", None):
                     is_error = 1
 
-            raw_json = raw_line
             parsed_entries.append(
                 {
                     "entry_type": entry.type,
@@ -141,7 +156,6 @@ def load_jsonl_file(
                     "tokens_input": inp,
                     "tokens_output": out,
                     "is_error": is_error,
-                    "raw_json": raw_json,
                 }
             )
 

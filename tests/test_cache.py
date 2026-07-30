@@ -85,7 +85,6 @@ def test_insert_messages_stores_entries(tmp_path):
                 "timestamp": "2026-07-23T10:00:00",
                 "uuid": "u1",
                 "content_text": "hello world",
-                "raw_json": "{}",
             }
         ],
     )
@@ -111,14 +110,12 @@ def test_search_messages_finds_matching_content(tmp_path):
                 "timestamp": "2026-07-23T10:00:00",
                 "uuid": "u1",
                 "content_text": "let's talk about litellm proxies",
-                "raw_json": "{}",
             },
             {
                 "entry_type": "user",
                 "timestamp": "2026-07-23T10:01:00",
                 "uuid": "u2",
                 "content_text": "completely unrelated text",
-                "raw_json": "{}",
             },
         ],
     )
@@ -142,7 +139,6 @@ def test_search_messages_with_project_filter(tmp_path):
                 "timestamp": None,
                 "uuid": "u1",
                 "content_text": "hi",
-                "raw_json": "{}",
             }
         ],
     )
@@ -156,7 +152,6 @@ def test_search_messages_with_project_filter(tmp_path):
                 "timestamp": None,
                 "uuid": "u2",
                 "content_text": "hi",
-                "raw_json": "{}",
             }
         ],
     )
@@ -178,14 +173,12 @@ def test_search_messages_with_role_filter(tmp_path):
                 "timestamp": None,
                 "uuid": "u1",
                 "content_text": "hi",
-                "raw_json": "{}",
             },
             {
                 "entry_type": "assistant",
                 "timestamp": None,
                 "uuid": "u2",
                 "content_text": "hi",
-                "raw_json": "{}",
             },
         ],
     )
@@ -207,14 +200,12 @@ def test_get_session_messages_ordered(tmp_path):
                 "timestamp": None,
                 "uuid": "u1",
                 "content_text": "first",
-                "raw_json": "{}",
             },
             {
                 "entry_type": "assistant",
                 "timestamp": None,
                 "uuid": "u2",
                 "content_text": "second",
-                "raw_json": "{}",
             },
         ],
     )
@@ -388,7 +379,6 @@ def test_fts5_search_finds_content(tmp_path):
                 "timestamp": "2026-01-01T00:00:00Z",
                 "uuid": "u1",
                 "content_text": "find the payment bug",
-                "raw_json": "{}",
             },
         ],
     )
@@ -410,7 +400,6 @@ def test_fts5_clear_all_removes_index(tmp_path):
                 "timestamp": "2026-01-01T00:00:00Z",
                 "uuid": "u1",
                 "content_text": "test content",
-                "raw_json": "{}",
             },
         ],
     )
