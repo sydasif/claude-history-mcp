@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import logging
+from pydantic import ValidationError
+
 from .models import (
     SILENT_SKIP_TYPES,
     AiTitleEntry,
@@ -20,6 +23,8 @@ from .models import (
     UserEntry,
     AssistantEntry,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _passthrough(data: dict[str, Any], entry_type: str) -> PassthroughEntry:
@@ -60,8 +65,9 @@ def create_entry(data: dict[str, Any]) -> Any | None:
             # Unknown type with DAG fields - keep for searchability
             return _passthrough(data, entry_type)
         return None
-    except Exception:
+    except ValidationError as e:
         # Malformed data - try to create a PassthroughEntry if possible
+        logger.debug("Falling back to passthrough for entry type %s: %s", entry_type, e)
         if data.get("uuid") and data.get("sessionId"):
             return _passthrough(data, entry_type)
         # Unknown type with uuid -> keep for searchability

@@ -151,11 +151,11 @@ def isolated_home(tmp_path, monkeypatch):
     )
     # Reset the module-level cached engine so it re-initializes against the
     # isolated HOME for each test.
-    import claude_history_mcp.server as server_module
+    import claude_history_mcp.engine as engine_module
 
-    server_module._engine = None
+    engine_module.reset_engine()
     yield
-    server_module._engine = None
+    engine_module.reset_engine()
 
 
 @pytest.mark.asyncio

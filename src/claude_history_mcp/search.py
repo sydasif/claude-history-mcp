@@ -36,9 +36,7 @@ class SearchEngine:
         offset: int = 0,
     ) -> list[dict]:
         """List sessions with optional filters and pagination."""
-        sessions = self.cache.get_sessions(
-            limit=max(100, limit * 3)
-        )  # overfetch for filtering
+        sessions = self.cache.get_sessions(limit=offset + limit)
 
         if project:
             sessions = [
@@ -90,7 +88,7 @@ class SearchEngine:
             project_id=project_id,
             session_id=session_id,
             role=role,
-            limit=max(100, (offset + limit) * 3),
+            limit=offset + limit,
         )
 
         # Post-filter by tool_name and date (SQLite LIKE can't filter JSON tool_names)
@@ -150,8 +148,7 @@ class SearchEngine:
         session = self.cache.get_session(session_id)
         if session:
             return session
-        sessions = self.cache.get_sessions(limit=1000)
-        matches = [s for s in sessions if s["session_id"].startswith(session_id)]
+        matches = self.cache.find_sessions_by_prefix(session_id, limit=11)
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
@@ -205,7 +202,7 @@ class SearchEngine:
     ) -> list[dict]:
         """Search the global command history with pagination."""
         results = self.cache.search_history(
-            query=query, project=project, limit=max(100, (offset + limit) * 2)
+            query=query, project=project, limit=offset + limit
         )
 
         if from_date or to_date:

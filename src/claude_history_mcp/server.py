@@ -11,10 +11,12 @@ from fastmcp import FastMCP
 
 from .memory import reflect, retain
 
+from .engine import get_engine as _get_engine
+
 _SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,128}$")
 
 if TYPE_CHECKING:
-    from .search import SearchEngine
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -23,17 +25,14 @@ mcp = FastMCP(
     instructions="Query Claude Code session history, search messages, and analyze usage patterns.",
 )
 
-# Global search engine, initialized on first tool call
-_engine: SearchEngine | None = None
 
-
-def _get_engine() -> SearchEngine:
-    global _engine
-    if _engine is None:
-        from . import initialize
-
-        _engine = initialize()
-    return _engine
+def _validate_session_id(session_id: str) -> str | None:
+    """Validate session_id format. Returns error message or None if valid."""
+    if len(session_id) < 8:
+        return "session_id must be at least 8 characters"
+    if not _SESSION_ID_PATTERN.match(session_id):
+        return "Invalid session_id format"
+    return None
 
 
 @mcp.tool
@@ -81,10 +80,8 @@ def get_session_transcript(
         include_thinking: Whether to include thinking blocks (default false)
     """
     try:
-        if len(session_id) < 8:
-            return [{"error": "session_id must be at least 8 characters"}]
-        if not _SESSION_ID_PATTERN.match(session_id):
-            return [{"error": "Invalid session_id format"}]
+        if err := _validate_session_id(session_id):
+            return [{"error": err}]
         engine = _get_engine()
         result = engine.get_session(session_id)
         if result is None:
@@ -292,10 +289,8 @@ def get_file_changes(session_id: str) -> dict[str, Any]:
         session_id: Session ID (full or prefix, minimum 8 characters)
     """
     try:
-        if len(session_id) < 8:
-            return {"error": "session_id must be at least 8 characters"}
-        if not _SESSION_ID_PATTERN.match(session_id):
-            return {"error": "Invalid session_id format"}
+        if err := _validate_session_id(session_id):
+            return {"error": err}
 
         engine = _get_engine()
         messages = engine.cache.get_messages_by_tool(session_id)
@@ -415,7 +410,13 @@ def search_file_changes(
                 else []
             )
             for ti in tool_inputs:
-                if file_path.lower() in json.dumps(ti.get("input", {})).lower():
+                input_data = ti.get("input", {})
+                candidate_paths = [
+                    str(input_data.get("file_path", "")),
+                    str(input_data.get("path", "")),
+                    str(input_data.get("filePath", "")),
+                ]
+                if any(file_path.lower() in p.lower() for p in candidate_paths):
                     sessions[sid]["operations"].append(
                         {
                             "tool": ti.get("name", ""),
@@ -451,10 +452,8 @@ def get_tool_inputs(
         limit: Maximum results to return (default 100)
     """
     try:
-        if len(session_id) < 8:
-            return {"error": "session_id must be at least 8 characters"}
-        if not _SESSION_ID_PATTERN.match(session_id):
-            return {"error": "Invalid session_id format"}
+        if err := _validate_session_id(session_id):
+            return {"error": err}
 
         engine = _get_engine()
         messages = engine.cache.get_messages_by_tool(session_id, tool_name)

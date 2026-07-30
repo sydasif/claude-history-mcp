@@ -88,13 +88,13 @@ def setup_scratch_home(tmp_path, monkeypatch):
     )
 
     # Mock global SearchEngine in memory.py so it uses our test database
-    import claude_history_mcp.memory as memory_module
+    import claude_history_mcp.engine as engine_module
 
-    memory_module._engine = SearchEngine(cache)
+    engine_module._engine = SearchEngine(cache)
 
     yield proj_dir
 
-    memory_module._engine = None
+    engine_module._engine = None
 
 
 def test_retain_creates_note_and_updates_index(setup_scratch_home):

@@ -38,6 +38,7 @@ def load_jsonl_file(
     """Parse a single JSONL file and store in our cache."""
     session_id = file_path.stem
     parsed_entries = []
+    total_parsed = 0
     first_user_message = ""
     message_count = 0
     total_input = 0
@@ -59,6 +60,8 @@ def load_jsonl_file(
             except json.JSONDecodeError:
                 errors += 1
                 continue
+
+            raw_line = line  # Preserve original JSON to avoid costly re-serialization
 
             # Skip known types we don't care about
             entry_type = data.get("type", "")
@@ -123,15 +126,7 @@ def load_jsonl_file(
                 if getattr(entry, "requestId", None):
                     is_error = 1
 
-            # Serialize entry to JSON
-            try:
-                raw_json = json.dumps(
-                    entry.model_dump() if hasattr(entry, "model_dump") else str(entry),
-                    ensure_ascii=False,
-                )
-            except Exception:
-                raw_json = str(entry)
-
+            raw_json = raw_line
             parsed_entries.append(
                 {
                     "entry_type": entry.type,
@@ -154,11 +149,13 @@ def load_jsonl_file(
                 cache.insert_messages(
                     project_id, session_id, file_path.name, parsed_entries
                 )
+                total_parsed += len(parsed_entries)
                 parsed_entries.clear()
 
     # Store remaining in our cache
     if parsed_entries:
         cache.insert_messages(project_id, session_id, file_path.name, parsed_entries)
+        total_parsed += len(parsed_entries)
 
     # Upsert session metadata
     cache.upsert_session(
@@ -178,7 +175,7 @@ def load_jsonl_file(
     return LoadResult(
         session_id=session_id,
         project_id=project_id,
-        parsed_entries=len(parsed_entries),
+        parsed_entries=total_parsed,
         error_entries=errors,
         first_user_message=first_user_message[:200],
         message_count=message_count,

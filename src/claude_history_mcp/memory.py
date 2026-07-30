@@ -20,8 +20,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .search import SearchEngine
 from .utils import scrub_surrogates
+
+from .engine import get_engine as _get_search_engine
 
 logger = logging.getLogger(__name__)
 
@@ -221,9 +222,16 @@ def _retain_note(
     return {
         "name": safe_name,
         "path": str(note_path),
-        "description": description,
+        "description": _yaml_escape(description),
         "created": datetime.now(UTC).isoformat(),
     }
+
+
+def _yaml_escape(s: str) -> str:
+    """Minimal YAML escaping for safe string representation."""
+    if not s:
+        return ""
+    return s.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +261,7 @@ def retain(
         project_dir = _project_display_to_path(project)
         if project_dir is None:
             return [{"error": f"Project not found: {project}"}]
-        desc = description or statement[:120]
+        desc = _yaml_escape(description or statement[:120])
         result = _retain_note(
             project_dir=project_dir,
             name=desc[:80],
@@ -383,19 +391,3 @@ def reflect(
     except Exception as e:
         logger.exception("reflect failed")
         return [{"error": str(e)}]
-
-
-# ---------------------------------------------------------------------------
-# Lazy engine singleton (same pattern as server.py)
-# ---------------------------------------------------------------------------
-
-_engine: SearchEngine | None = None
-
-
-def _get_search_engine() -> SearchEngine:
-    global _engine
-    if _engine is None:
-        from . import initialize
-
-        _engine = initialize()
-    return _engine

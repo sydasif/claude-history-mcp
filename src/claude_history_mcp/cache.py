@@ -81,10 +81,9 @@ CREATE TABLE IF NOT EXISTS file_tracking (
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(entry_type);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
-CREATE INDEX IF NOT EXISTS idx_messages_text ON messages(content_text);
 CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(project_id);
-CREATE INDEX IF NOT EXISTS idx_messages_tool_inputs ON messages(tool_inputs);
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_last_ts ON sessions(last_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_history_project ON history_commands(project);
 """
 
@@ -168,6 +167,12 @@ class CacheManager:
             self._migrate_schema()
             self._conn.executescript(SCHEMA)
             self._setup_fts()
+
+            # Drop legacy indexes that bloat writes and are never queried
+            self._conn.execute("DROP INDEX IF EXISTS idx_messages_text")
+            self._conn.execute("DROP INDEX IF EXISTS idx_messages_tool_inputs")
+            self._conn.commit()
+
         return self._conn
 
     def _migrate_schema(self) -> None:
@@ -380,6 +385,22 @@ class CacheManager:
         )
         return dict(row) if row else None
 
+    def find_sessions_by_prefix(
+        self, prefix: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Find sessions by ID prefix to resolve ambiguous short IDs."""
+        rows = (
+            self.connect()
+            .execute(
+                "SELECT s.*, p.project_path, p.display_name FROM sessions s "
+                "JOIN projects p ON s.project_id=p.id "
+                "WHERE s.session_id LIKE ? ORDER BY s.last_timestamp DESC LIMIT ?",
+                (f"{prefix}%", limit),
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
     # --- Message CRUD ---
     def insert_messages(
         self,
@@ -462,13 +483,17 @@ class CacheManager:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         """FTS5-based message search."""
+        # Sanitize query for FTS5 MATCH to prevent syntax errors on special chars
+        escaped = query.replace('"', '""')
+        fts_query = f'"{escaped}"'
+
         sql = (
             "SELECT m.*, p.project_path, p.display_name FROM messages m "
             "JOIN messages_fts f ON m.id = f.rowid "
             "JOIN projects p ON m.project_id=p.id "
             "WHERE messages_fts MATCH ?"
         )
-        params: list = [query]
+        params: list = [fts_query]
         if project_id:
             sql += " AND m.project_id=?"
             params.append(project_id)
@@ -542,10 +567,25 @@ class CacheManager:
 
     def get_changed_files(self, file_paths: list[Path]) -> list[Path]:
         """Return files whose mtime differs from cached (or that aren't cached yet)."""
+        if not file_paths:
+            return []
+
+        paths = [str(fp) for fp in file_paths]
+        placeholders = ",".join(["?"] * len(paths))
+        rows = (
+            self.connect()
+            .execute(
+                f"SELECT file_path, last_mtime FROM file_tracking WHERE file_path IN ({placeholders})",
+                paths,
+            )
+            .fetchall()
+        )
+        cached_mtimes = {r["file_path"]: r["last_mtime"] for r in rows}
+
         changed = []
         for fp in file_paths:
             current_mtime = fp.stat().st_mtime
-            cached_mtime = self.get_file_mtime(str(fp))
+            cached_mtime = cached_mtimes.get(str(fp))
             if cached_mtime is None or abs(current_mtime - cached_mtime) >= 1.0:
                 changed.append(fp)
         return changed
@@ -578,8 +618,6 @@ class CacheManager:
         conn = self.connect()
         for table in self._TABLE_NAMES:
             conn.execute(f"DELETE FROM {table}")  # noqa: S608 — table names from whitelist
-        if getattr(self, "_fts_available", False):
-            conn.execute("DELETE FROM messages_fts")
         conn.commit()
 
     def get_stats(self) -> dict[str, int]:
