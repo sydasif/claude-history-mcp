@@ -10,7 +10,9 @@ from claude_history_mcp.loader import (
 
 
 def _write_jsonl(path, lines):
-    path.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    path.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
 
 def _sample_lines():
@@ -25,7 +27,11 @@ def _sample_lines():
             "cwd": "/home/zulu/proj",
             "version": "1.0",
             "timestamp": "2026-07-23T10:00:00Z",
-            "message": {"role": "user", "content": [{"type": "text", "text": "hello there"}], "usage": None},
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": "hello there"}],
+                "usage": None,
+            },
         },
         {
             "type": "assistant",
@@ -70,6 +76,7 @@ def test_load_jsonl_file_returns_correct_stats(tmp_path):
     result = load_jsonl_file(f, cache, pid)
     assert result.message_count == 2
 
+
 def test_load_jsonl_file_empty(tmp_path):
     cache = CacheManager(tmp_path / "db.sqlite")
     pid = cache.upsert_project("/a", "a")
@@ -88,10 +95,11 @@ def test_load_jsonl_file_malformed_lines_skipped(tmp_path):
         '{"type": "user", "uuid": "u1", "sessionId": "s1", "parentUuid": null, '
         '"isSidechain": false, "userType": "external", "cwd": "/tmp", "version": "1.0", '
         '"timestamp": "2024-01-01T00:00:00Z", "message": {"role": "user", "content": [], "usage": null}}\n'
-        'not json at all\n'
+        "not json at all\n"
     )
     result = load_jsonl_file(f, cache, pid)
     assert result.message_count == 1
+
 
 def test_load_jsonl_file_extracts_first_user_message(tmp_path):
     cache = CacheManager(tmp_path / "db.sqlite")
@@ -119,20 +127,23 @@ def test_load_jsonl_file_handles_missing_timestamps(tmp_path):
     pid = cache.upsert_project("/a", "a")
     f = tmp_path / "sess1.jsonl"
     # Provide minimal required fields for library validation
-    _write_jsonl(f, [
-        {
-            "type": "user",
-            "uuid": "u1",
-            "sessionId": "sess1",
-            "parentUuid": None,
-            "isSidechain": False,
-            "userType": "external",
-            "cwd": "/tmp",
-            "version": "1.0",
-            "timestamp": "2026-07-23T10:00:00Z",
-            "message": {"role": "user", "content": [], "usage": None}
-        }
-    ])
+    _write_jsonl(
+        f,
+        [
+            {
+                "type": "user",
+                "uuid": "u1",
+                "sessionId": "sess1",
+                "parentUuid": None,
+                "isSidechain": False,
+                "userType": "external",
+                "cwd": "/tmp",
+                "version": "1.0",
+                "timestamp": "2026-07-23T10:00:00Z",
+                "message": {"role": "user", "content": [], "usage": None},
+            }
+        ],
+    )
     result = load_jsonl_file(f, cache, pid)
     assert result.message_count == 1
 
@@ -143,8 +154,18 @@ def test_load_history_file(tmp_path):
     _write_jsonl(
         f,
         [
-            {"display": "ls -la", "project": "/a", "sessionId": "s1", "timestamp": 1000},
-            {"display": "cd /tmp", "project": "/a", "sessionId": "s1", "timestamp": 1001},
+            {
+                "display": "ls -la",
+                "project": "/a",
+                "sessionId": "s1",
+                "timestamp": 1000,
+            },
+            {
+                "display": "cd /tmp",
+                "project": "/a",
+                "sessionId": "s1",
+                "timestamp": 1001,
+            },
         ],
     )
     count = load_history_file(f, cache)
@@ -156,7 +177,10 @@ def test_load_history_file_idempotent_across_reloads(tmp_path):
     server start, so re-loading the same file must not duplicate rows."""
     cache = CacheManager(tmp_path / "db.sqlite")
     f = tmp_path / "history.jsonl"
-    _write_jsonl(f, [{"display": "ls -la", "project": "/a", "sessionId": "s1", "timestamp": 1000}])
+    _write_jsonl(
+        f,
+        [{"display": "ls -la", "project": "/a", "sessionId": "s1", "timestamp": 1000}],
+    )
     load_history_file(f, cache)
     load_history_file(f, cache)
     assert cache.get_stats()["history_commands"] == 1
@@ -169,8 +193,9 @@ def test_load_project_rolls_up_project_stats(tmp_path):
     _write_jsonl(proj_dir / "sess1.jsonl", _sample_lines())
 
     load_project(proj_dir, cache)
-    project = cache.get_project(str(proj_dir))
-    assert project is not None
+    projects = cache.get_all_projects()
+    assert len(projects) == 1
+    project = projects[0]
     assert project["total_messages"] == 2
     assert project["total_input_tokens"] == 10
 

@@ -1,8 +1,4 @@
-from pathlib import Path
-
 from claude_history_mcp.utils import (
-    get_claude_dir,
-    get_projects_dir,
     parse_timestamp,
     scrub_surrogates,
 )
@@ -34,11 +30,3 @@ def test_parse_timestamp_none():
 
 def test_parse_timestamp_invalid():
     assert parse_timestamp("garbage") is None
-
-
-def test_get_claude_dir():
-    assert get_claude_dir() == Path.home() / ".claude"
-
-
-def test_get_projects_dir():
-    assert get_projects_dir() == Path.home() / ".claude" / "projects"

@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 
-from .memory import reflect, retain, list_memory_notes, read_memory_note
+from .memory import (
+    reflect,
+    retain,
+    list_memory_notes as _list_memory_notes,
+    read_memory_note as _read_memory_note,
+)
 
 from .engine import get_engine as _get_engine
+
+import re
 
 _SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,128}$")
 
@@ -265,7 +271,7 @@ def list_memory_notes(project: str) -> list[dict[str, Any]]:
     Args:
         project: Project display name or path fragment.
     """
-    return list_memory_notes(project)
+    return _list_memory_notes(project)
 
 
 @mcp.tool
@@ -276,7 +282,7 @@ def read_memory_note(project: str, note_name: str) -> list[dict[str, Any]]:
         project: Project display name or path fragment.
         note_name: Name of the memory note (from list_memory_notes).
     """
-    return read_memory_note(project, note_name)
+    return _read_memory_note(project, note_name)
 
 
 @mcp.resource("claude://health")

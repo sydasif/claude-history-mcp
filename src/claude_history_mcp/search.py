@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import dateparser
 
@@ -23,7 +24,7 @@ class SearchEngine:
     def __init__(self, cache: CacheManager):
         self.cache = cache
 
-    def list_projects(self) -> list[dict]:
+    def list_projects(self) -> list[dict[str, Any]]:
         """List all projects with metadata."""
         return self.cache.get_all_projects()
 
@@ -34,7 +35,7 @@ class SearchEngine:
         to_date: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """List sessions with optional filters and pagination."""
         sessions = self.cache.get_sessions(limit=offset + limit)
 
@@ -79,7 +80,7 @@ class SearchEngine:
         to_date: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Search messages with multiple filters and pagination."""
         project_id = self._resolve_project_id(project) if project else None
 
@@ -124,7 +125,7 @@ class SearchEngine:
 
         return formatted_results[offset : offset + limit]
 
-    def _resolve_session(self, session_id: str) -> dict | None:
+    def _resolve_session(self, session_id: str) -> dict[str, Any] | None:
         """Resolve a session by exact ID or unambiguous prefix (min 8 chars upstream).
 
         Returns the session dict, an {"error": "ambiguous_prefix", "candidates": [...]}
@@ -143,7 +144,7 @@ class SearchEngine:
             }
         return None
 
-    def get_session(self, session_id: str) -> dict | None:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Get full session with messages."""
         session = self._resolve_session(session_id)
         if not session:
@@ -184,7 +185,7 @@ class SearchEngine:
         to_date: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Search the global command history with pagination."""
         results = self.cache.search_history(
             query=query, project=project, limit=offset + limit
@@ -228,7 +229,7 @@ class SearchEngine:
         project: str | None = None,
         include_totals: bool = False,
         session_id: str | None = None,
-    ) -> list[dict] | dict:
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """Get model breakdown with cost estimates."""
         project_id = self._resolve_project_id(project) if project else None
 

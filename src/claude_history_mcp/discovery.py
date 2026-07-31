@@ -4,8 +4,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .utils import get_projects_dir
-
 
 @dataclass(slots=True)
 class ProjectInfo:
@@ -14,18 +12,10 @@ class ProjectInfo:
     jsonl_files: list[Path]
 
 
-@dataclass(slots=True)
-class SessionFileInfo:
-    session_id: str  # filename without .jsonl
-    project: ProjectInfo
-    file_path: Path
-    file_size: int
-
-
 def discover_projects(projects_dir: Path | None = None) -> list[ProjectInfo]:
     """Scan ~/.claude/projects/ for directories containing .jsonl files."""
     if projects_dir is None:
-        projects_dir = get_projects_dir()
+        projects_dir = Path.home() / ".claude" / "projects"
     if not projects_dir.exists():
         return []
 
@@ -44,8 +34,6 @@ def discover_projects(projects_dir: Path | None = None) -> list[ProjectInfo]:
                 )
             )
     return projects
-
-
 
 
 def _extract_display_name(jsonl_path: Path) -> str | None:

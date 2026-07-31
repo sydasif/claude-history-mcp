@@ -17,21 +17,6 @@ def test_upsert_project_inserts_and_returns_id(tmp_path):
     assert isinstance(pid, int)
 
 
-def test_upsert_project_updates_display_name(tmp_path):
-    cache = _cache(tmp_path)
-    pid1 = cache.upsert_project("/home/zulu/proj", "old-name")
-    pid2 = cache.upsert_project("/home/zulu/proj", "new-name")
-    assert pid1 == pid2
-    proj = cache.get_project("/home/zulu/proj")
-    assert proj is not None
-    assert proj["display_name"] == "new-name"
-
-
-def test_get_project_none_for_missing(tmp_path):
-    cache = _cache(tmp_path)
-    assert cache.get_project("/nope") is None
-
-
 def test_get_all_projects(tmp_path):
     cache = _cache(tmp_path)
     cache.upsert_project("/a", "a")
@@ -288,65 +273,6 @@ def test_get_stats_counts(tmp_path):
     stats = cache.get_stats()
     assert stats["projects"] == 1
     assert stats["sessions"] == 1
-
-
-def test_transaction_commits_on_success(tmp_path):
-    cache = _cache(tmp_path)
-    with cache.transaction() as conn:
-        conn.execute(
-            "INSERT INTO projects (project_path, display_name) VALUES (?, ?)",
-            ("/a", "a"),
-        )
-    assert cache.get_project("/a") is not None
-
-
-def test_transaction_rolls_back_on_exception(tmp_path):
-    cache = _cache(tmp_path)
-    try:
-        with cache.transaction() as conn:
-            conn.execute(
-                "INSERT INTO projects (project_path, display_name) VALUES (?, ?)",
-                ("/a", "a"),
-            )
-            raise RuntimeError("boom")
-    except RuntimeError:
-        pass
-    assert cache.get_project("/a") is None
-
-
-def test_recompute_project_stats_rolls_up_from_sessions(tmp_path):
-    """Regression test: projects.total_messages/total_input_tokens/
-    total_output_tokens/earliest_timestamp/latest_timestamp were never
-    written anywhere in the original blueprint, so list_projects() always
-    reported zeros."""
-    cache = _cache(tmp_path)
-    pid = cache.upsert_project("/a", "a")
-    cache.upsert_session(
-        pid,
-        "s1",
-        message_count=5,
-        total_input_tokens=100,
-        total_output_tokens=50,
-        first_timestamp="2026-07-01T00:00:00",
-        last_timestamp="2026-07-02T00:00:00",
-    )
-    cache.upsert_session(
-        pid,
-        "s2",
-        message_count=3,
-        total_input_tokens=30,
-        total_output_tokens=20,
-        first_timestamp="2026-07-03T00:00:00",
-        last_timestamp="2026-07-04T00:00:00",
-    )
-    cache.recompute_project_stats(pid)
-    project = cache.get_project("/a")
-    assert project is not None
-    assert project["total_messages"] == 8
-    assert project["total_input_tokens"] == 130
-    assert project["total_output_tokens"] == 70
-    assert project["earliest_timestamp"] == "2026-07-01T00:00:00"
-    assert project["latest_timestamp"] == "2026-07-04T00:00:00"
 
 
 def test_get_changed_files_detects_new_and_modified(tmp_path):

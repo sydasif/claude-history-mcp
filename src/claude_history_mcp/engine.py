@@ -14,8 +14,3 @@ def get_engine() -> SearchEngine:
 
         _engine = initialize()
     return _engine
-
-
-def reset_engine() -> None:
-    global _engine
-    _engine = None

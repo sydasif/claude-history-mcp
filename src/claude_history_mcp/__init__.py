@@ -5,7 +5,6 @@ from pathlib import Path
 from .cache import CacheManager
 from .loader import load_all_projects, load_history_file
 from .search import SearchEngine
-from .utils import get_history_file
 
 __all__ = ["get_cache_path", "initialize", "CacheManager", "SearchEngine"]
 
@@ -34,8 +33,8 @@ def initialize(force: bool = False) -> SearchEngine:
     load_all_projects(cache, force=force)
 
     # Load command history
-    history_file = get_history_file()
-    if history_file:
+    history_file = Path.home() / ".claude" / "history.jsonl"
+    if history_file.exists():
         load_history_file(history_file, cache)
 
     return SearchEngine(cache)

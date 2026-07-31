@@ -2,7 +2,6 @@
 
 import re
 from datetime import datetime
-from pathlib import Path
 
 
 def scrub_surrogates(s: str | None) -> str | None:
@@ -41,34 +40,6 @@ def parse_timestamp(ts: str | None) -> datetime | None:
         return dt
     except (ValueError, AttributeError):
         return None
-
-
-def get_claude_dir() -> Path:
-    """Return ~/.claude directory.
-
-    Returns:
-        Path to the Claude Code directory.
-    """
-    return Path.home() / ".claude"
-
-
-def get_projects_dir() -> Path:
-    """Return ~/.claude/projects directory.
-
-    Returns:
-        Path to the Claude Code projects directory.
-    """
-    return get_claude_dir() / "projects"
-
-
-def get_history_file() -> Path | None:
-    """Return ~/.claude/history.jsonl if it exists.
-
-    Returns:
-        Path to the history file, or None if it doesn't exist.
-    """
-    path = get_claude_dir() / "history.jsonl"
-    return path if path.exists() else None
 
 
 # Model pricing per 1M tokens (input, output) in USD

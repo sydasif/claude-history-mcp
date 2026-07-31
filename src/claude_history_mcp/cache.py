@@ -6,11 +6,9 @@ Provides thread-safe CRUD operations with WAL mode and connection pooling.
 import logging
 import sqlite3
 import threading
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Generator
 
 logger = logging.getLogger(__name__)
 
@@ -224,27 +222,6 @@ class CacheManager:
         except Exception:
             logger.exception("Failed to backfill FTS table")
 
-    def close(self) -> None:
-        """Close database connection if open."""
-        if self._conn:
-            self._conn.close()
-            self._conn = None
-
-    @contextmanager
-    def transaction(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager for atomic database transactions.
-
-        Yields:
-            Database connection with automatic commit on success or rollback on error.
-        """
-        conn = self.connect()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-
     # --- Project CRUD ---
     def upsert_project(self, project_path: str, display_name: str) -> int:
         """Insert or update a project record.
@@ -299,14 +276,6 @@ class CacheManager:
             ),
         )
         conn.commit()
-
-    def get_project(self, project_path: str) -> dict[str, Any] | None:
-        row = (
-            self.connect()
-            .execute("SELECT * FROM projects WHERE project_path=?", (project_path,))
-            .fetchone()
-        )
-        return dict(row) if row else None
 
     def get_all_projects(self) -> list[dict[str, Any]]:
         rows = (
@@ -471,7 +440,7 @@ class CacheManager:
             "SELECT m.*, p.project_path, p.display_name FROM messages m "
             "JOIN projects p ON m.project_id=p.id WHERE m.content_text LIKE ?"
         )
-        params: list = [f"%{query}%"]
+        params: list[Any] = [f"%{query}%"]
         if project_id:
             sql += " AND m.project_id=?"
             params.append(project_id)
@@ -517,7 +486,7 @@ class CacheManager:
             "JOIN projects p ON m.project_id=p.id "
             "WHERE messages_fts MATCH ?"
         )
-        params: list = [fts_query]
+        params: list[Any] = [fts_query]
         if project_id:
             sql += " AND m.project_id=?"
             params.append(project_id)
@@ -553,7 +522,7 @@ class CacheManager:
         return [dict(r) for r in self.connect().execute(sql, params).fetchall()]
 
     # --- History CRUD ---
-    def insert_history_commands(self, commands: list[dict]) -> int:
+    def insert_history_commands(self, commands: list[dict[str, Any]]) -> int:
         """Insert command history rows, ignoring duplicates via UNIQUE constraint."""
         conn = self.connect()
         cur = conn.executemany(
@@ -571,7 +540,7 @@ class CacheManager:
         self, query: str, project: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
         sql = "SELECT * FROM history_commands WHERE display LIKE ?"
-        params: list = [f"%{query}%"]
+        params: list[Any] = [f"%{query}%"]
         if project:
             sql += " AND project LIKE ?"
             params.append(f"%{project}%")
@@ -580,17 +549,6 @@ class CacheManager:
         return [dict(r) for r in self.connect().execute(sql, params).fetchall()]
 
     # --- File mtime tracking (cache invalidation) ---
-    def get_file_mtime(self, file_path: str) -> float | None:
-        row = (
-            self.connect()
-            .execute(
-                "SELECT last_mtime FROM file_tracking WHERE file_path=?",
-                (file_path,),
-            )
-            .fetchone()
-        )
-        return row["last_mtime"] if row else None
-
     def set_file_mtime(self, file_path: str, mtime: float) -> None:
         conn = self.connect()
         conn.execute(
