@@ -46,20 +46,6 @@ def discover_projects(projects_dir: Path | None = None) -> list[ProjectInfo]:
     return projects
 
 
-def discover_all_sessions(projects_dir: Path | None = None) -> list[SessionFileInfo]:
-    """List all session JSONL files across all projects."""
-    sessions = []
-    for project in discover_projects(projects_dir):
-        for jsonl_file in project.jsonl_files:
-            sessions.append(
-                SessionFileInfo(
-                    session_id=jsonl_file.stem,
-                    project=project,
-                    file_path=jsonl_file,
-                    file_size=jsonl_file.stat().st_size,
-                )
-            )
-    return sorted(sessions, key=lambda s: s.file_size, reverse=True)
 
 
 def _extract_display_name(jsonl_path: Path) -> str | None:

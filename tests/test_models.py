@@ -103,21 +103,6 @@ def test_assistant_entry_thinking_text_tool_use():
     assert len(entry.message.content) == 3
 
 
-def test_system_entry_subtype():
-    entry = SystemEntry(
-        type="system",
-        subtype="stop_hook_summary",
-        content="done",
-        uuid="u1",
-        sessionId="s1",
-        parentUuid=None,
-        isSidechain=False,
-        userType="external",
-        cwd="/tmp",
-        version="1.0",
-        timestamp="2024-01-01T00:00:00Z",
-    )
-    assert entry.subtype == "stop_hook_summary"
 
 
 def test_summary_entry():
@@ -187,36 +172,8 @@ def test_user_entry_missing_message_no_crash():
     assert entry is not None
 
 
-def test_assistant_entry_error_true():
-    entry = AssistantEntry(
-        type="assistant",
-        uuid="a1",
-        sessionId="s1",
-        parentUuid=None,
-        isSidechain=False,
-        userType="external",
-        cwd="/tmp",
-        version="1.0",
-        timestamp="2024-01-01T00:00:00Z",
-        message=cast(
-            Any,
-            {
-                "id": "msg-1",
-                "type": "message",
-                "role": "assistant",
-                "content": [],
-                "model": "claude-3",
-                "usage": None,
-            },
-        ),
-        requestId="req-1",
-    )
-    assert entry.requestId == "req-1"
 
 
-def test_thinking_content_signature_optional():
-    c = ThinkingContent(type="thinking", thinking="hmm")
-    assert c.signature is None
 
 
 def test_passthrough_entry():

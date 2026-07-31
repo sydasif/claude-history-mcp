@@ -40,18 +40,13 @@ class UsageInfo(BaseModel):
     """Token usage information for tracking API consumption."""
 
     input_tokens: int | None = None
-    cache_creation_input_tokens: int | None = None
-    cache_read_input_tokens: int | None = None
     output_tokens: int | None = None
-    service_tier: str | None = None
-    server_tool_use: dict[str, Any] | None = None
 
 
 class ToolUseContent(BaseModel):
     """Tool invocation content block."""
 
     type: Literal["tool_use"]
-    id: str
     name: str
     input: dict[str, Any]
 
@@ -60,10 +55,8 @@ class ToolResultContent(BaseModel):
     """Tool result content block."""
 
     type: Literal["tool_result"]
-    tool_use_id: str
     content: str | list[dict[str, Any]]
     is_error: bool | None = None
-    agentId: str | None = None
 
 
 class ThinkingContent(BaseModel):
@@ -71,7 +64,6 @@ class ThinkingContent(BaseModel):
 
     type: Literal["thinking"]
     thinking: str
-    signature: str | None = None
 
 
 # Content item types that appear in message content arrays
@@ -101,8 +93,7 @@ class AssistantMessageModel(BaseModel):
     role: Literal["assistant"]
     model: str
     content: list[ContentItem]
-    stop_reason: str | None = None
-    stop_sequence: str | None = None
+
     usage: UsageInfo | None = None
 
 
@@ -119,17 +110,10 @@ class BaseEntry(BaseModel):
 
     parentUuid: str | None = None
     isSidechain: bool = False
-    userType: str = ""
     cwd: str = ""
     sessionId: str = ""
-    version: str = ""
     uuid: str = ""
     timestamp: str = ""
-    isMeta: bool | None = None
-    agentId: str | None = None
-    gitBranch: str | None = None
-    teamName: str | None = None
-    spawnedAgentId: str | None = None
 
 
 class UserEntry(BaseEntry):
@@ -137,8 +121,6 @@ class UserEntry(BaseEntry):
 
     type: Literal["user"]
     message: UserMessageModel
-    toolUseResult: ToolUseResult | None = None
-    sourceToolUseID: str | None = None
 
 
 class AssistantEntry(BaseEntry):
@@ -146,7 +128,6 @@ class AssistantEntry(BaseEntry):
 
     type: Literal["assistant"]
     message: AssistantMessageModel
-    requestId: str | None = None
 
 
 class SummaryEntry(BaseModel):
@@ -154,9 +135,7 @@ class SummaryEntry(BaseModel):
 
     type: Literal["summary"]
     summary: str
-    leafUuid: str
     cwd: str | None = None
-    sessionId: str | None = None
 
 
 class AiTitleEntry(BaseModel):
@@ -164,7 +143,6 @@ class AiTitleEntry(BaseModel):
 
     type: Literal["ai-title"]
     aiTitle: str
-    sessionId: str
 
 
 class SystemEntry(BaseEntry):
@@ -172,22 +150,14 @@ class SystemEntry(BaseEntry):
 
     type: Literal["system"]
     content: str | None = None
-    subtype: str | None = None
-    level: str | None = None
-    hasOutput: bool | None = None
-    hookErrors: list[str] | None = None
-    hookInfos: list[dict[str, Any]] | None = None
-    preventedContinuation: bool | None = None
-    compactMetadata: dict[str, Any] | None = None
 
 
 class QueueOperationEntry(BaseModel):
     """Queue operations (enqueue/dequeue/remove)."""
 
     type: Literal["queue-operation"]
-    operation: Literal["enqueue", "dequeue", "remove", "popAll"]
+
     timestamp: str
-    sessionId: str
     content: list[ContentItem] | str | None = None
 
 
@@ -195,10 +165,7 @@ class AttachmentEntry(BaseEntry):
     """Out-of-band attachment entry (hook callbacks, etc.)."""
 
     type: Literal["attachment"]
-    attachment: dict[str, Any] = {}
-    userType: str = "external"
-    cwd: str = ""
-    version: str = ""
+
 
 
 class PassthroughEntry(BaseModel):
@@ -210,7 +177,6 @@ class PassthroughEntry(BaseModel):
     timestamp: str
     type: str | None = None
     isSidechain: bool = False
-    agentId: str | None = None
 
 
 # Combined union for transcript entries

@@ -69,9 +69,6 @@ def test_load_jsonl_file_returns_correct_stats(tmp_path):
 
     result = load_jsonl_file(f, cache, pid)
     assert result.message_count == 2
-    assert result.total_input_tokens == 10
-    assert result.total_output_tokens == 20
-
 
 def test_load_jsonl_file_empty(tmp_path):
     cache = CacheManager(tmp_path / "db.sqlite")
@@ -94,9 +91,7 @@ def test_load_jsonl_file_malformed_lines_skipped(tmp_path):
         'not json at all\n'
     )
     result = load_jsonl_file(f, cache, pid)
-    assert result.error_entries == 1
     assert result.message_count == 1
-
 
 def test_load_jsonl_file_extracts_first_user_message(tmp_path):
     cache = CacheManager(tmp_path / "db.sqlite")

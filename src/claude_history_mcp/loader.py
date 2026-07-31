@@ -39,11 +39,8 @@ class LoadResult:
     session_id: str
     project_id: int
     parsed_entries: int
-    error_entries: int
     first_user_message: str
     message_count: int
-    total_input_tokens: int
-    total_output_tokens: int
 
 
 def load_jsonl_file(
@@ -138,9 +135,6 @@ def load_jsonl_file(
             if entry.type == "assistant":
                 if msg and getattr(msg, "model", None):
                     model = msg.model
-                # Library uses requestId instead of error field
-                if getattr(entry, "requestId", None):
-                    is_error = 1
 
             parsed_entries.append(
                 {
@@ -190,11 +184,8 @@ def load_jsonl_file(
         session_id=session_id,
         project_id=project_id,
         parsed_entries=total_parsed,
-        error_entries=errors,
         first_user_message=first_user_message[:200],
         message_count=message_count,
-        total_input_tokens=total_input,
-        total_output_tokens=total_output,
     )
 
 

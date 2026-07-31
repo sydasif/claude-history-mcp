@@ -36,7 +36,6 @@ def _passthrough(data: dict[str, Any], entry_type: str) -> PassthroughEntry:
         timestamp=data.get("timestamp", ""),
         type=entry_type,
         isSidechain=data.get("isSidechain", False),
-        agentId=data.get("agentId"),
     )
 
 

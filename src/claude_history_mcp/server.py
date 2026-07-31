@@ -68,7 +68,6 @@ def list_sessions(
 @mcp.tool
 def get_session_transcript(
     session_id: str,
-    include_thinking: bool = False,
 ) -> list[dict[str, Any]]:
     """Get full conversation transcript for a session.
 
@@ -77,7 +76,6 @@ def get_session_transcript(
 
     Args:
         session_id: Session ID (full or prefix, minimum 8 characters)
-        include_thinking: Whether to include thinking blocks (default false)
     """
     try:
         if err := _validate_session_id(session_id):
@@ -305,9 +303,6 @@ def get_file_changes(session_id: str) -> dict[str, Any]:
         }
 
         for msg in messages:
-            tool_names = (
-                json.loads(msg.get("tool_names", "[]")) if msg.get("tool_names") else []
-            )
             tool_inputs = (
                 json.loads(msg.get("tool_inputs", "[]"))
                 if msg.get("tool_inputs")

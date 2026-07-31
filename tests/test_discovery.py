@@ -1,6 +1,6 @@
 import json
 
-from claude_history_mcp.discovery import discover_all_sessions, discover_projects
+from claude_history_mcp.discovery import discover_projects
 
 
 def _write_jsonl(path, lines):
@@ -32,15 +32,6 @@ def test_discover_projects_skips_dot_dirs(tmp_path):
     assert discover_projects(tmp_path) == []
 
 
-def test_discover_all_sessions(tmp_path):
-    proj = tmp_path / "-home-zulu-proj"
-    proj.mkdir()
-    _write_jsonl(proj / "s1.jsonl", [{"type": "user", "cwd": "/home/zulu/proj"}])
-    _write_jsonl(proj / "s2.jsonl", [{"type": "user", "cwd": "/home/zulu/proj"}])
-
-    sessions = discover_all_sessions(tmp_path)
-    assert len(sessions) == 2
-    assert {s.session_id for s in sessions} == {"s1", "s2"}
 
 
 def test_extract_display_name_checks_multiple_lines(tmp_path):
