@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 
-from .memory import reflect, retain
+from .memory import reflect, retain, list_memory_notes, read_memory_note
 
 from .engine import get_engine as _get_engine
 
@@ -256,6 +256,27 @@ def memory_reflect(
         session_ids=session_ids,
         session_limit=session_limit,
     )
+
+
+@mcp.tool
+def list_memory_notes(project: str) -> list[dict[str, Any]]:
+    """List all memory notes for a project.
+
+    Args:
+        project: Project display name or path fragment.
+    """
+    return list_memory_notes(project)
+
+
+@mcp.tool
+def read_memory_note(project: str, note_name: str) -> list[dict[str, Any]]:
+    """Read a specific memory note by name.
+
+    Args:
+        project: Project display name or path fragment.
+        note_name: Name of the memory note (from list_memory_notes).
+    """
+    return read_memory_note(project, note_name)
 
 
 @mcp.resource("claude://health")

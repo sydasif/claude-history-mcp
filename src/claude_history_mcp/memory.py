@@ -277,6 +277,69 @@ def retain(
         return [{"error": str(e)}]
 
 
+def list_memory_notes(project: str) -> list[dict[str, Any]]:
+    """List all memory notes for a project.
+
+    Args:
+        project: Project display name or path fragment.
+    """
+    try:
+        project_dir = _project_display_to_path(project)
+        if project_dir is None:
+            return [{"error": f"Project not found: {project}"}]
+
+        notes = _list_memory_notes(project_dir)
+        return notes
+    except Exception as e:
+        logger.exception("list_memory_notes failed")
+        return [{"error": str(e)}]
+
+
+def read_memory_note(project: str, note_name: str) -> list[dict[str, Any]]:
+    """Read a specific memory note by name.
+
+    Args:
+        project: Project display name or path fragment.
+        note_name: Name of the memory note (from list_memory_notes).
+    """
+    try:
+        project_dir = _project_display_to_path(project)
+        if project_dir is None:
+            return [{"error": f"Project not found: {project}"}]
+
+        notes = _list_memory_notes(project_dir)
+        note = next((n for n in notes if n["name"] == note_name), None)
+        if note is None:
+            return [{"error": f"Memory note not found: {note_name}"}]
+
+        text = _read_markdown(Path(note["path"]))
+        front = _parse_frontmatter(text)
+        body = (
+            _FRONTMATTER_RE.sub("", text).strip()
+            if _FRONTMATTER_RE.search(text)
+            else text
+        )
+
+        return [
+            {
+                "name": note["name"],
+                "path": note["path"],
+                "description": note.get("description", ""),
+                "note_type": front.get("type", "unknown"),
+                "origin_session": front.get("originSessionId", ""),
+                "tags": front.get("tags", "[]"),
+                "title": front.get("title", ""),
+                "created": front.get("created", ""),
+                "last_update": front.get("last_update", ""),
+                "related": front.get("related", "[]"),
+                "content": body,
+            }
+        ]
+    except Exception as e:
+        logger.exception("read_memory_note failed")
+        return [{"error": str(e)}]
+
+
 def reflect(
     project: str,
     query: str,
