@@ -6,9 +6,8 @@ from claude_history_mcp.models import (
     AiTitleEntry,
     PassthroughEntry,
     SummaryEntry,
-    SystemEntry,
     TextContent,
-    ThinkingContent,
+
     ToolResultContent,
     ToolUseContent,
     UserEntry,
