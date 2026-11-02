@@ -1,4 +1,14 @@
-"""Higher-level query functions on top of CacheManager, with date/filter support."""
+"""Higher-level query functions on top of CacheManager, with date/filter support.
+
+Layers:
+
+- Pure logic: module-level functions that transform plain data (lists of dicts)
+  into filtered/formatted results. No I/O, no clock, no globals.
+- Side effects: ``CacheManager`` methods (DB access) called only by
+  ``SearchEngine``.
+- Orchestration: ``SearchEngine`` methods sequence fetch -> pure transform ->
+  return.
+"""
 
 import json
 import logging
@@ -13,11 +23,160 @@ from .utils import calculate_cost, parse_timestamp
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Pure logic
+# ---------------------------------------------------------------------------
+
+
 def _entry_type_to_role(entry_type: str | None) -> str:
-    """Map entry_type to a role string."""
+    """Map entry_type to a role string. Pure."""
     if entry_type in ("user", "assistant", "system"):
         return entry_type
     return entry_type or "unknown"
+
+
+def _filter_sessions_by_project(
+    sessions: list[dict[str, Any]], project: str
+) -> list[dict[str, Any]]:
+    """Keep sessions whose path or display name contains project. Pure."""
+    needle = project.lower()
+    return [
+        s
+        for s in sessions
+        if needle
+        in (s.get("project_path", "") + s.get("display_name", "")).lower()
+    ]
+
+
+def _filter_sessions_by_date(
+    sessions: list[dict[str, Any]],
+    from_dt: datetime | None,
+    to_dt: datetime | None,
+) -> list[dict[str, Any]]:
+    """Keep sessions whose last_timestamp falls within [from_dt, to_dt]. Pure."""
+    if from_dt is None and to_dt is None:
+        return sessions
+
+    kept: list[dict[str, Any]] = []
+    for s in sessions:
+        ts = parse_timestamp(s.get("last_timestamp"))
+        if ts is None:
+            kept.append(s)
+            continue
+        if from_dt is not None and ts < from_dt:
+            continue
+        if to_dt is not None and ts > to_dt:
+            continue
+        kept.append(s)
+    return kept
+
+
+def _format_message_result(r: dict[str, Any]) -> dict[str, Any]:
+    """Transform one cache row into a search_messages result dict. Pure."""
+    text = r.get("content_text", "")
+    tool_names_raw = r.get("tool_names", "")
+    tool_names: list[Any]
+    if tool_names_raw:
+        tool_names = json.loads(tool_names_raw)
+    else:
+        tool_names = []
+    return {
+        "session_id": r.get("session_id"),
+        "project": r.get("project_path"),
+        "timestamp": r.get("timestamp"),
+        "role": _entry_type_to_role(r.get("entry_type")),
+        "text_preview": text[:200] if text else "",
+        "tool_names": tool_names,
+        "model": r.get("model"),
+        "tokens_input": r.get("tokens_input", 0),
+        "tokens_output": r.get("tokens_output", 0),
+    }
+
+
+def _resolve_project_id(
+    projects: list[dict[str, Any]], project: str
+) -> int | None:
+    """Resolve project name fragment to a project id. Pure."""
+    if not project:
+        return None
+    needle = project.lower()
+    for p in projects:
+        if needle in (p.get("project_path", "") + p.get("display_name", "")).lower():
+            return int(p["id"])
+    return None
+
+
+def _filter_results_by_date(
+    results: list[dict[str, Any]],
+    from_dt: datetime | None,
+    to_dt: datetime | None,
+) -> list[dict[str, Any]]:
+    """Keep history rows whose epoch timestamp falls within [from_dt, to_dt]. Pure."""
+    if from_dt is None and to_dt is None:
+        return results
+
+    kept: list[dict[str, Any]] = []
+    for r in results:
+        ts = datetime.fromtimestamp(r.get("timestamp_epoch", 0) / 1000, tz=UTC).replace(tzinfo=None)
+        if from_dt is not None and ts < from_dt:
+            continue
+        if to_dt is not None and ts > to_dt:
+            continue
+        kept.append(r)
+    return kept
+
+
+def _aggregate_model_usage(
+    rows: list[dict[str, Any]],
+    session_id: str | None,
+    include_totals: bool,
+) -> list[dict[str, Any]] | dict[str, Any]:
+    """Aggregate raw model rows into breakdown (and optional totals). Pure."""
+    result: list[dict[str, Any]] = []
+    total_cost = 0.0
+    total_input = 0
+    total_output = 0
+    model_costs: dict[str, float] = {}
+
+    for r in rows:
+        model = r.get("model") or "unknown"
+        inp = r.get("input_tokens") or r.get("tokens_input") or 0
+        out = r.get("output_tokens") or r.get("tokens_output") or 0
+        cost = calculate_cost(model, inp, out)
+
+        if session_id is None:
+            result.append(
+                {
+                    "model": model,
+                    "message_count": r.get("message_count", 0),
+                    "input_tokens": inp,
+                    "output_tokens": out,
+                    "estimated_cost_usd": round(cost, 4),
+                }
+            )
+
+        total_input += inp
+        total_output += out
+        total_cost += cost
+        model_costs[model] = model_costs.get(model, 0.0) + cost
+
+    if include_totals:
+        return {
+            "breakdown": result,
+            "total_cost_usd": round(total_cost, 4),
+            "total_input_tokens": total_input,
+            "total_output_tokens": total_output,
+            "cost_by_model": {
+                k: round(v, 4)
+                for k, v in sorted(model_costs.items(), key=lambda x: -x[1])
+            },
+        }
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Orchestration (effects + pure logic)
+# ---------------------------------------------------------------------------
 
 
 class SearchEngine:
@@ -40,32 +199,17 @@ class SearchEngine:
         sessions = self.cache.get_sessions(limit=offset + limit)
 
         if project:
-            sessions = [
-                s
-                for s in sessions
-                if project.lower()
-                in (s.get("project_path", "") + s.get("display_name", "")).lower()
-            ]
+            sessions = _filter_sessions_by_project(sessions, project)
 
-        if from_date or to_date:
-            from_dt = (
-                self._parse_natural_date(from_date, start_of_day=True)
-                if from_date
-                else None
-            )
-            to_dt = (
-                self._parse_natural_date(to_date, end_of_day=True) if to_date else None
-            )
-            filtered = []
-            for s in sessions:
-                ts = parse_timestamp(s.get("last_timestamp"))
-                if ts:
-                    if from_dt and ts < from_dt:
-                        continue
-                    if to_dt and ts > to_dt:
-                        continue
-                filtered.append(s)
-            sessions = filtered
+        from_dt = (
+            self._parse_natural_date(from_date, start_of_day=True)
+            if from_date
+            else None
+        )
+        to_dt = (
+            self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+        )
+        sessions = _filter_sessions_by_date(sessions, from_dt, to_dt)
 
         return sessions[offset : offset + limit]
 
@@ -103,25 +247,7 @@ class SearchEngine:
         )
 
         # Transform results to include role and text_preview
-        formatted_results = []
-        for r in results:
-            role_str = _entry_type_to_role(r.get("entry_type"))
-            text = r.get("content_text", "")
-            formatted_results.append(
-                {
-                    "session_id": r.get("session_id"),
-                    "project": r.get("project_path"),
-                    "timestamp": r.get("timestamp"),
-                    "role": role_str,
-                    "text_preview": text[:200] if text else "",
-                    "tool_names": json.loads(r.get("tool_names", "[]"))
-                    if r.get("tool_names")
-                    else [],
-                    "model": r.get("model"),
-                    "tokens_input": r.get("tokens_input", 0),
-                    "tokens_output": r.get("tokens_output", 0),
-                }
-            )
+        formatted_results = [_format_message_result(r) for r in results]
 
         return formatted_results[offset : offset + limit]
 
@@ -130,6 +256,7 @@ class SearchEngine:
 
         Returns the session dict, an {"error": "ambiguous_prefix", "candidates": [...]}
         dict if the prefix matches multiple sessions, or None if there's no match.
+        Side effect: reads via cache.
         """
         session = self.cache.get_session(session_id)
         if session:
@@ -191,38 +318,24 @@ class SearchEngine:
             query=query, project=project, limit=offset + limit
         )
 
-        if from_date or to_date:
-            from_dt = (
-                self._parse_natural_date(from_date, start_of_day=True)
-                if from_date
-                else None
-            )
-            to_dt = (
-                self._parse_natural_date(to_date, end_of_day=True) if to_date else None
-            )
-            filtered = []
-            for r in results:
-                ts = datetime.fromtimestamp(r.get("timestamp_epoch", 0) / 1000, tz=UTC)
-                if from_dt and ts < from_dt:
-                    continue
-                if to_dt and ts > to_dt:
-                    continue
-                filtered.append(r)
-            results = filtered
+        from_dt = (
+            self._parse_natural_date(from_date, start_of_day=True)
+            if from_date
+            else None
+        )
+        to_dt = (
+            self._parse_natural_date(to_date, end_of_day=True) if to_date else None
+        )
+        results = _filter_results_by_date(results, from_dt, to_dt)
 
         return results[offset : offset + limit]
 
     def _resolve_project_id(self, project: str | None) -> int | None:
+        """Resolve project name fragment to a project id via cache."""
         if not project:
             return None
         projects = self.cache.get_all_projects()
-        for p in projects:
-            if (
-                project.lower()
-                in (p.get("project_path", "") + p.get("display_name", "")).lower()
-            ):
-                return int(p["id"])
-        return None
+        return _resolve_project_id(projects, project)
 
     def get_model_usage(
         self,
@@ -240,47 +353,7 @@ class SearchEngine:
         else:
             rows = self.cache.get_model_usage(project_id=project_id)
 
-        result = []
-        total_cost = 0.0
-        total_input = 0
-        total_output = 0
-        model_costs: dict[str, float] = {}
-
-        for r in rows:
-            # Handle both model_usage and cost_data structure
-            model = r.get("model") or "unknown"
-            inp = r.get("input_tokens") or r.get("tokens_input") or 0
-            out = r.get("output_tokens") or r.get("tokens_output") or 0
-            cost = calculate_cost(model, inp, out)
-
-            if not session_id:
-                result.append(
-                    {
-                        "model": model,
-                        "message_count": r.get("message_count", 0),
-                        "input_tokens": inp,
-                        "output_tokens": out,
-                        "estimated_cost_usd": round(cost, 4),
-                    }
-                )
-
-            total_input += inp
-            total_output += out
-            total_cost += cost
-            model_costs[model] = model_costs.get(model, 0.0) + cost
-
-        if include_totals:
-            return {
-                "breakdown": result,
-                "total_cost_usd": round(total_cost, 4),
-                "total_input_tokens": total_input,
-                "total_output_tokens": total_output,
-                "cost_by_model": {
-                    k: round(v, 4)
-                    for k, v in sorted(model_costs.items(), key=lambda x: -x[1])
-                },
-            }
-        return result
+        return _aggregate_model_usage(rows, session_id, include_totals)
 
     def _parse_natural_date(
         self, date_str: str, start_of_day: bool = False, end_of_day: bool = False
