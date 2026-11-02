@@ -6,7 +6,7 @@ from .cache import CacheManager
 from .loader import load_all_projects, load_history_file
 from .search import SearchEngine
 
-__all__ = ["get_cache_path", "initialize", "CacheManager", "SearchEngine"]
+__all__ = ["CacheManager", "SearchEngine", "get_cache_path", "initialize"]
 
 
 def get_cache_path() -> Path:

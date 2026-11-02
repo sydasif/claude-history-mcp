@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_history_mcp.memory import reflect, retain
 from claude_history_mcp.cache import CacheManager
+from claude_history_mcp.memory import reflect, retain
 from claude_history_mcp.search import SearchEngine
 
 

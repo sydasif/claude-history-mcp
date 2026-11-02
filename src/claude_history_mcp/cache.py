@@ -609,7 +609,7 @@ class CacheManager:
     def clear_all(self) -> None:
         conn = self.connect()
         for table in self._TABLE_NAMES:
-            conn.execute(f"DELETE FROM {table}")  # noqa: S608 — table names from whitelist
+            conn.execute(f"DELETE FROM {table}")
         conn.commit()
 
     def get_stats(self) -> dict[str, int]:

@@ -20,9 +20,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .utils import scrub_surrogates
-
 from .engine import get_engine as _get_search_engine
+from .utils import scrub_surrogates
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +48,12 @@ def _project_display_to_path(display_name: str) -> Path | None:
     if not root.exists():
         return None
     target = display_name.lower().strip("/")
-    if target.startswith("-"):
-        target = target[1:]
+    target = target.removeprefix("-")
     for d in root.iterdir():
         if not d.is_dir():
             continue
         decoded = d.name
-        if decoded.startswith("-"):
-            decoded = decoded[1:]
+        decoded = decoded.removeprefix("-")
         decoded = decoded.replace("--", "/")
         if target in decoded.lower():
             return d

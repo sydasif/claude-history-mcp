@@ -8,7 +8,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-
 # =============================================================================
 # Content Types (from message.content arrays)
 # =============================================================================
@@ -95,9 +94,6 @@ class AssistantMessageModel(BaseModel):
     content: list[ContentItem]
 
     usage: UsageInfo | None = None
-
-
-ToolUseResult = str | list[Any] | dict[str, Any]
 
 
 # =============================================================================
@@ -216,26 +212,21 @@ SILENT_SKIP_TYPES = frozenset(
 # MCP Response Models
 # =============================================================================
 
-
 __all__ = [
-    # Content types
-    "TextContent",
-    "ToolUseContent",
-    "ToolResultContent",
-    "ThinkingContent",
-    "ImageContent",
-    "UsageInfo",
-    # Transcript entry types
-    "BaseEntry",
-    "UserEntry",
-    "AssistantEntry",
-    "SystemEntry",
-    "SummaryEntry",
-    "AiTitleEntry",
-    "AttachmentEntry",
-    "QueueOperationEntry",
-    "PassthroughEntry",
-    "TranscriptEntry",
-    # Constants
     "SILENT_SKIP_TYPES",
+    # Content types
+    "AiTitleEntry",
+    "AssistantEntry",
+    "AttachmentEntry",
+    "BaseEntry",
+    "ImageContent",
+    "PassthroughEntry",
+    "QueueOperationEntry",
+    "SummaryEntry",
+    "TextContent",
+    "ThinkingContent",
+    "ToolResultContent",
+    "ToolUseContent",
+    "TranscriptEntry",
+    "UsageInfo",
 ]

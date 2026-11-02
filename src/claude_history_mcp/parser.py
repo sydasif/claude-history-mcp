@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-import logging
 from pydantic import ValidationError
 
 from .models import (
     SILENT_SKIP_TYPES,
     AiTitleEntry,
+    AssistantEntry,
     AttachmentEntry,
     BaseEntry,
     PassthroughEntry,
@@ -21,7 +22,6 @@ from .models import (
     ToolResultContent,
     ToolUseContent,
     UserEntry,
-    AssistantEntry,
 )
 
 logger = logging.getLogger(__name__)

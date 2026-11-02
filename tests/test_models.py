@@ -3,16 +3,15 @@
 from typing import Any, cast
 
 from claude_history_mcp.models import (
+    SILENT_SKIP_TYPES,
     AiTitleEntry,
+    AssistantEntry,
     PassthroughEntry,
     SummaryEntry,
     TextContent,
-
     ToolResultContent,
     ToolUseContent,
     UserEntry,
-    AssistantEntry,
-    SILENT_SKIP_TYPES,
 )
 
 

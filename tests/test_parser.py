@@ -4,8 +4,8 @@ from typing import Any, cast
 
 from claude_history_mcp.models import (
     AiTitleEntry,
-    AttachmentEntry,
     AssistantEntry,
+    AttachmentEntry,
     PassthroughEntry,
     SummaryEntry,
     SystemEntry,

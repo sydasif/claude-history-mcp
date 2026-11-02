@@ -4,25 +4,25 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+import re
+from typing import Any
 
 from fastmcp import FastMCP
 
+from .engine import get_engine as _get_engine
+from .memory import (
+    list_memory_notes as _list_memory_notes,
+)
+from .memory import (
+    read_memory_note as _read_memory_note,
+)
 from .memory import (
     reflect,
     retain,
-    list_memory_notes as _list_memory_notes,
-    read_memory_note as _read_memory_note,
 )
-
-from .engine import get_engine as _get_engine
-
-import re
 
 _SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,128}$")
 
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,8 @@
 import asyncio
 import json
+
 from fastmcp import Client
+
 from claude_history_mcp.server import mcp
 
 

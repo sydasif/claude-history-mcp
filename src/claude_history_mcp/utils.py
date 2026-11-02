@@ -33,7 +33,7 @@ def parse_timestamp(ts: str | None) -> datetime | None:
     if not ts:
         return None
     try:
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(ts)
         # Convert to naive UTC for consistent comparison
         if dt.tzinfo is not None:
             dt = dt.replace(tzinfo=None)

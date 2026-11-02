@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .cache import CacheManager
-from .discovery import discover_projects, _extract_display_name
+from .discovery import _extract_display_name, discover_projects
 from .models import SILENT_SKIP_TYPES
 from .parser import (
     create_entry,
